@@ -93,7 +93,7 @@ export const unknownReporter: Rule = {
     const found: Diagnostic[] = [];
 
     const shape =
-      /\b(\d{1,4})\s+([A-Z][A-Za-z.'’ ]{0,22}?\.(?:\s?\d?(?:d|th|st|rd))?)\s+(\d{1,5})\b/g;
+      /\b\d{1,4}\s+(?<reporter>[A-Z][A-Za-z.'’ ]{0,22}?\.(?:\s?\d?(?:d|th|st|rd))?)\s+\d{1,5}\b/g;
 
     // Both the matches and the citations run in document order, so a single
     // moving pointer answers "is this already claimed?" in linear time.
@@ -123,7 +123,7 @@ export const unknownReporter: Rule = {
       }
       if (claimed) continue;
 
-      const token = match[2]?.trim();
+      const token = match.groups?.reporter?.trim();
       if (!token) continue;
       // A reporter the table knows but the parser skipped is almost always a
       // citation broken across lines by a PDF extractor — annoying, but

@@ -31,7 +31,7 @@ const BARS: ReadonlyArray<readonly [number, number, number, number, Rgba]> = [
 ];
 
 function draw(size: number): Buffer {
-  const pixels: Rgba[] = new Array(size * size).fill(CLEAR);
+  const pixels: Rgba[] = Array.from({ length: size * size }, () => CLEAR);
   const radius = size * 0.22;
 
   const inRoundedSquare = (x: number, y: number): boolean => {

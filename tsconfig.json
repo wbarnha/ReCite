@@ -4,6 +4,16 @@
     { "path": "./packages/core" },
     { "path": "./packages/rules" },
     { "path": "./packages/engine" },
-    { "path": "./apps/web" }
+    { "path": "./apps/web" },
+
+    // Tests and build tooling emit nothing, but they are still code. Without
+    // these, `tsc --build` never looks at them and a test can go on asserting
+    // against a signature that no longer exists — and ESLint's type-aware
+    // rules, which need a project per file, skip them too.
+    { "path": "./packages/core/test" },
+    { "path": "./packages/rules/test" },
+    { "path": "./packages/engine/test" },
+    { "path": "./apps/web/test" },
+    { "path": "./tools" }
   ]
 }

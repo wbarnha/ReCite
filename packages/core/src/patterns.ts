@@ -135,7 +135,7 @@ export function buildPatterns() {
     /** `11 U.S.C. § 362(a)(1)` */
     statute: new RegExp(
       String.raw`\b(?<title>\d{1,3})\s+(?<code>U\.\s*S\.\s*C\.|C\.F\.R\.)\s*(?:§§?\s*)?` +
-        String.raw`(?<section>\d[\w.]*(?:\([\w]{1,4}\))*)`,
+        String.raw`(?<section>\d[\w.]*(?:\(\w{1,4}\))*)`,
       "g",
     ),
 

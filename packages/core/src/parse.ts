@@ -536,7 +536,7 @@ export function findCaseName(
  */
 function inReName(body: string): string | undefined {
   const match =
-    /((?:In\s+re|In\s+the\s+Matter\s+of|Ex\s+parte|Estate\s+of)\s+[A-Z][^;:()]{1,120}?)$/.exec(
+    /((?:In\s+re|In\s+the\s+Matter\s+of|Ex\s+parte|Estate\s+of)\s+[A-Z][^;:()]{1,120})$/.exec(
       body,
     );
   return match?.[1]?.trim();

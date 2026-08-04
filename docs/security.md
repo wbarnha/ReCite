@@ -103,6 +103,31 @@ name is now recovered by a bounded backwards walk instead, which is linear.
 The same input now parses in under a millisecond, and
 `packages/core/test/robustness.test.ts` fails if the growth returns.
 
+### Fixed: quadratic trim in the court parenthetical
+
+Found later, by the linter rather than by reading — see [Linting](#linting)
+below.
+
+`splitParenthetical` trimmed whitespace and punctuation off its result with
+`replace(/^[\s,;]+|[\s,;]+$/g, "")`. This is a common idiom and it is
+quadratic. The second branch is anchored only at its end, so the engine
+retries it at every offset in the string, and at each one it consumes the
+whole remaining run of separators before the `$` finally rejects it.
+
+A parenthetical of `Jan` followed by 50,000 spaces spent **2.2 seconds**
+inside that single `String.replace`. Parenthetical text comes from the
+document being checked, so its length is not ours to assume. The trim is now
+a character loop; the same input takes well under a millisecond, and 800 KB
+takes 10 ms.
+
+Two things are worth recording about how this was found. The first is that it
+survived a deliberate ReDoS review — the review read the citation _patterns_,
+and this was in a `String.replace` that did not look like parsing. The second
+is that the first fix was wrong: rewriting the neighbouring date regex removed
+a genuine ambiguity but left the timing unchanged, because the cost was one
+line further down. Measuring after the fix, not just before it, is what caught
+that.
+
 ### Fixed: quadratic scan in RP002
 
 The unknown-reporter rule tested every regex match against every citation.
@@ -140,7 +165,9 @@ minimum Pages needs.
 
 - **No injection sinks.** No `innerHTML`, `dangerouslySetInnerHTML`, `eval`
   or `new Function` anywhere. All output goes through React children, which
-  escape. A citation containing `<script>` is displayed as text.
+  escape. A citation containing `<script>` is displayed as text. `react/no-danger`
+  is now an error, so re-introducing one is a build failure rather than a
+  review question.
 - **No network calls and no storage.** No `fetch`, no `XMLHttpRequest`, no
   `localStorage`, no cookies. Document text never leaves the page. The only
   external request in the whole application is Office.js, which Office
@@ -154,6 +181,28 @@ minimum Pages needs.
   and Vite are confined to the app.
 - **Word permissions.** The manifest asks for `ReadWriteDocument`, which is
   what reading citations and applying a fix requires, and nothing more.
+
+## Linting
+
+Two of the findings above were quadratic backtracking in a regular
+expression, and both were found by hand. That does not scale, so the check is
+now automated: `eslint-plugin-regexp` runs over every pattern in the
+repository on every commit, and `regexp/no-super-linear-backtracking` is an
+error.
+
+Turning it on found a third instance immediately — the date suffix in
+`splitParenthetical`, which had a genuine three-way whitespace ambiguity.
+That one is a fair illustration of the limits as well as the value: the
+linter flagged the ambiguous pattern correctly, but the two seconds were
+being spent one line below, in a `String.replace` the linter had nothing to
+say about because the regex itself is unambiguous. It is a good tripwire, not
+a proof of linearity. The timing tests in
+`packages/core/test/robustness.test.ts` remain the thing that actually holds
+the line.
+
+`react/no-danger` and `@typescript-eslint/no-floating-promises` are enforced
+for the same reason: both describe a property this codebase already has, and
+the point of enforcing them is that losing it becomes visible.
 
 ## Reporting a problem
 

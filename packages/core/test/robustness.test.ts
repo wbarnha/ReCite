@@ -10,6 +10,7 @@
 
 import { describe, expect, it } from "vitest";
 
+import { splitParenthetical } from "../src/courts.js";
 import { antecedentBefore, parse } from "../src/parse.js";
 
 /** Generous enough not to be flaky on a loaded runner, tight enough to catch O(n²). */
@@ -65,6 +66,43 @@ describe("pathological input", () => {
     const result = parse(brief);
     expect(performance.now() - started).toBeLessThan(BUDGET_MS);
     expect(result.citations).toHaveLength(2_000);
+  });
+});
+
+describe("court parentheticals", () => {
+  // `splitParenthetical` trimmed its result with
+  // `replace(/^[\s,;]+|[\s,;]+$/g, "")`. The second branch is anchored only
+  // at its end, so the engine retried it at every offset and consumed the
+  // whole remaining run of separators each time. A parenthetical of 50,000
+  // spaces took 2.2 seconds inside a single `String.replace`.
+  const padded = (spaces: number) => `1 U.S. 2 (Jan${" ".repeat(spaces)}!)`;
+
+  it("finishes promptly on a parenthetical padded with whitespace", () => {
+    expect(timeParse(padded(50_000))).toBeLessThan(BUDGET_MS);
+  });
+
+  it("does not grow quadratically as the padding grows", () => {
+    const small = timeParse(padded(25_000));
+    const large = timeParse(padded(100_000));
+    expect(large).toBeLessThan(Math.max(small, 1) * 8 + 200);
+  });
+
+  it.each([
+    ["Tex. App. Sept. 25, 2019", "Tex. App.", 2019],
+    ["S.D.N.Y. Mar. 1, 2023", "S.D.N.Y.", 2023],
+    ["Bankr. S.D.N.Y. Jan. 2020", "Bankr. S.D.N.Y.", 2020],
+    ["2d Cir. 1999", "2d Cir.", 1999],
+    ["  , 9th Cir. May 4, 2020 ,  ", "9th Cir.", 2020],
+  ])("still reads %s as the court and year", (body, court, year) => {
+    expect(splitParenthetical(body)).toMatchObject({ courtText: court, year });
+  });
+
+  it("keeps a date that is not a trailing month and day", () => {
+    // The month strip only ever looks at the tail, so a court name that
+    // happens to contain a month-like word survives.
+    expect(splitParenthetical("May Circuit Ct. 1999").courtText).toBe(
+      "May Circuit Ct.",
+    );
   });
 });
 

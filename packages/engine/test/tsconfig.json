@@ -1,0 +1,12 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node"]
+  },
+  // The engine suite runs against the same Mata v. Avianca text the parser is
+  // tested on, so the fixture module has to be part of this project too. Both
+  // projects emit nothing, so compiling it twice costs only time.
+  "include": ["**/*.ts", "../../core/test/fixtures/**/*.ts"],
+  "references": [{ "path": ".." }, { "path": "../../core" }, { "path": "../../rules" }]
+}

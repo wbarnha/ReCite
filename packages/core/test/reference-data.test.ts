@@ -30,10 +30,13 @@ describe("reporter table", () => {
   });
 
   it("never ends a series before it starts", () => {
-    for (const edition of REPORTERS) {
-      if (edition.end !== null)
-        expect(edition.end).toBeGreaterThanOrEqual(edition.start);
-    }
+    // Collecting the offenders rather than asserting inside the loop means a
+    // failure names them, and that the test still asserts something if a
+    // future edit leaves every `end` open.
+    const backwards = REPORTERS.filter((e) => e.end !== null && e.end < e.start).map(
+      (e) => `${e.abbrev} (${e.start}-${String(e.end)})`,
+    );
+    expect(backwards).toEqual([]);
   });
 
   it("has a continuous Federal Reporter series", () => {

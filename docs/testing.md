@@ -1,7 +1,7 @@
 # Testing, and where the fixtures come from
 
 ```console
-$ pnpm test          # 372 tests
+$ pnpm test          # 385 tests
 $ pnpm coverage
 $ pnpm check         # lint + format + types + tests, exactly what CI runs
 ```

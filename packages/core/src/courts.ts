@@ -114,14 +114,59 @@ export function splitParenthetical(body: string): {
 
   // Drop a trailing month/day so `(Tex. App. Sept. 25, 2019)` yields
   // `Tex. App.` rather than `Tex. App. Sept. 25`.
-  const withoutDate = head.replace(
-    /\s*(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.?\s*\d{0,2}\s*,?\s*$/,
-    "",
-  );
+  const withoutDate = stripDateSuffix(head);
 
-  const trimmed = withoutDate.replace(/^[\s,;]+|[\s,;]+$/g, "");
+  const trimmed = trimSeparators(withoutDate);
   if (!trimmed) return { year };
 
   const courtOffset = withoutDate.indexOf(trimmed);
   return { courtText: trimmed, courtOffset, year };
+}
+
+/**
+ * The month and day trailing a court name: ` Sept. 25, `, ` Mar. 1, `, ` Jan.`.
+ *
+ * Anchored at the end, and only ever applied to {@link DATE_SUFFIX_WINDOW}
+ * characters. Both matter. The pattern is unanchored at the *start*, so a
+ * regex engine retries it at every offset in the string it is given; on a
+ * parenthetical padded with whitespace the leading `\s*` then walks the whole
+ * remaining run before failing, once per offset. That is quadratic in the
+ * length of the parenthetical — 8 KB took 56 ms and 50 KB took two seconds —
+ * and a parenthetical is document text, so its length is chosen by whoever
+ * wrote the document. Capping the search at a fixed window makes the work
+ * constant regardless.
+ */
+const DATE_SUFFIX =
+  /\s*(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.?(?:\s*\d{1,2})?[\s,]*$/;
+
+/**
+ * How far back to look for it. The longest real suffix is ` September 25, `
+ * at fifteen characters, so this is roughly double what any date needs.
+ */
+const DATE_SUFFIX_WINDOW = 32;
+
+/**
+ * Strip whitespace, commas and semicolons from both ends.
+ *
+ * Written as a loop rather than as `replace(/^[\s,;]+|[\s,;]+$/g, "")`,
+ * which is the obvious spelling and is quadratic. The `[\s,;]+$` branch is
+ * anchored only at its end, so the engine retries it at every offset, and at
+ * each one it consumes the whole remaining run of separators before the `$`
+ * rejects it. On `"Jan" + 50,000 spaces + "!"` that one call took 2.2
+ * seconds; this loop takes well under a millisecond. Parentheticals come
+ * from the document being checked, so their length is not ours to assume.
+ */
+function trimSeparators(value: string): string {
+  const isSeparator = (ch: string) => ch === "," || ch === ";" || /\s/.test(ch);
+
+  let start = 0;
+  let end = value.length;
+  while (start < end && isSeparator(value[start]!)) start++;
+  while (end > start && isSeparator(value[end - 1]!)) end--;
+  return value.slice(start, end);
+}
+
+function stripDateSuffix(head: string): string {
+  const cut = Math.max(0, head.length - DATE_SUFFIX_WINDOW);
+  return head.slice(0, cut) + head.slice(cut).replace(DATE_SUFFIX, "");
 }

@@ -133,10 +133,26 @@ supplies the authority list know nothing about each other.
 ```console
 $ pnpm install
 $ pnpm dev            # web app on :3000
-$ pnpm test           # 372 tests
+$ pnpm test           # 385 tests
 $ pnpm check          # lint + format + types + tests, what CI runs
 $ pnpm build:release  # build, generate manifest.xml, write checksums
 ```
+
+### Linting
+
+`pnpm lint` is scoped to what each part of the codebase can actually get
+wrong, so a failure always means what it says:
+
+| Where          | What is checked                                                                                                                                                                                               |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| everywhere     | `eslint-plugin-regexp` — the parser _is_ regular expressions, and this reads them as a language rather than as strings. It is the check that catches super-linear backtracking before a user's document does. |
+| `apps/web/src` | `react-hooks` dependency arrays, plus `jsx-a11y`. A stale dependency here shows up as a check that silently uses the previous Bluebook profile.                                                               |
+| `**/*.ts`      | type-aware `typescript-eslint`, including `no-floating-promises` — the engine is async, and a dropped rejection would report a clean document because the check never ran.                                    |
+| `**/test`      | `vitest` rules. A stray `.only` would leave CI green while running almost nothing.                                                                                                                            |
+
+Type-aware rules need every file to belong to a TypeScript project, so tests
+and `tools/` have their own `tsconfig.json` and are referenced from the root.
+That means `pnpm typecheck` covers them too, which it previously did not.
 
 ## Reference data
 

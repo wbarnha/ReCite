@@ -193,7 +193,7 @@ describe("manifest", () => {
   });
 
   it("uses HTTPS for every URL, as Office requires", () => {
-    const urls = manifest.match(/DefaultValue="(https?:[^"]+)"/g) ?? [];
+    const urls = manifest.match(/DefaultValue="https?:[^"]+"/g) ?? [];
     expect(urls.length).toBeGreaterThan(0);
     expect(urls.every((url) => url.includes("https://"))).toBe(true);
   });
