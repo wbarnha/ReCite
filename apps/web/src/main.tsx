@@ -5,6 +5,7 @@ import { createRoot } from "react-dom/client";
 
 import { Findings } from "./components/Findings.js";
 import { Footer } from "./components/Footer.js";
+import { ProfilePicker } from "./components/ProfilePicker.js";
 import { BrowserHost } from "./host.js";
 import { SAMPLE_CORPUS, SAMPLE_TEXT } from "./sample.js";
 import "./styles.css";
@@ -99,6 +100,12 @@ function WebApp() {
 
         <section>
           <h2>Findings</h2>
+          <ProfilePicker
+            profile={recite.profile}
+            onEdition={recite.setEdition}
+            onStyle={recite.setStyle}
+            disabled={recite.busy}
+          />
           <div className="toolbar">
             <label className="checkbox">
               <input

@@ -9,6 +9,16 @@ import { DEMO_CORPUS, MATA_EXCERPT } from "../../core/test/fixtures/mata-avianca
 
 const engine = () => new Engine({ currentYear: 2026 });
 
+/**
+ * An engine that requires the spaced reporter form.
+ *
+ * The default profile is the 21st edition for court documents, which permits
+ * closing up reporter abbreviations. Tests about spacing have to name the
+ * edition that does not.
+ */
+const strictSpacing = () =>
+  new Engine({ currentYear: 2026, profile: { edition: 20, style: "practitioner" } });
+
 const BRIEF = `El Al Israel Airlines, Ltd. v. Tseng, 525 U.S. 155, 161, 119 S.Ct. 662 (1999).
 Delta v. Epsilon, 999 F.3d 1 (2d Cir. 1950).
 `;
@@ -51,7 +61,7 @@ describe("check", () => {
 
 describe("fix", () => {
   it("applies only safe corrections by default", async () => {
-    const result = await engine().fix(BRIEF);
+    const result = await strictSpacing().fix(BRIEF);
     expect(result.applied.every((c) => c.safety === "safe")).toBe(true);
     expect(result.fixedText).toContain("119 S. Ct. 662");
     // The 1950 F.3d citation needs a judgement call, so it is left alone.
@@ -71,7 +81,7 @@ describe("fix", () => {
 
   it("leaves the surrounding prose untouched", async () => {
     const text = "The court held, in A v. B, 119 S.Ct. 662 (1999), that x.";
-    const result = await engine().fix(text);
+    const result = await strictSpacing().fix(text);
     expect(result.fixedText).toBe(
       "The court held, in A v. B, 119 S. Ct. 662 (1999), that x.",
     );
@@ -108,6 +118,7 @@ describe("rule selection", () => {
     const only = new Engine({
       rules: selectRules({ enable: ["RP001"] }),
       currentYear: 2026,
+      profile: { edition: 20, style: "practitioner" },
     });
     const result = await only.check(BRIEF);
     expect(new Set(result.diagnostics.map((d) => d.ruleId))).toEqual(
@@ -154,6 +165,7 @@ describe("with a verification provider", () => {
         verify: () => Promise.reject(new Error("network down")),
       },
       currentYear: 2026,
+      profile: { edition: 20, style: "practitioner" },
     });
     const result = await broken.check("A v. B, 119 S.Ct. 662 (1999).");
     expect(result.diagnostics.map((d) => d.ruleId)).toContain("RP001");
@@ -163,7 +175,7 @@ describe("with a verification provider", () => {
 
 describe("the Mata filing end to end", () => {
   it("finds the defects a format checker can see", async () => {
-    const result = await engine().check(MATA_EXCERPT);
+    const result = await strictSpacing().check(MATA_EXCERPT);
     const ids = new Set(result.diagnostics.map((d) => d.ruleId));
 
     // The reporter is spelled `S.Ct.` in one place and `S. Ct.` in another.
@@ -200,11 +212,76 @@ describe("the Mata filing end to end", () => {
   });
 
   it("safe fixes leave the document's meaning alone", async () => {
-    const result = await engine().fix(MATA_EXCERPT);
+    const result = await strictSpacing().fix(MATA_EXCERPT);
     // Only spacing changed, so every case name survives untouched.
     for (const name of ["Varghese", "Zicherman", "Kaiser Steel", "Miller"]) {
       expect(result.fixedText).toContain(name);
     }
     expect(result.fixedText).toContain("119 S. Ct. 662");
+  });
+});
+
+describe("Bluebook profile at the engine level", () => {
+  const TIGHTENED = "El Al v. Tseng, 525 U.S. 155, 161, 119 S.Ct. 662 (1999).";
+
+  it("defaults to the 21st edition for court documents", async () => {
+    // A brief may close up reporter abbreviations under that edition, so the
+    // out-of-the-box run does not complain about it.
+    const result = await new Engine({ currentYear: 2026 }).check(TIGHTENED);
+    expect(result.diagnostics.map((d) => d.ruleId)).not.toContain("RP001");
+  });
+
+  it("flags the same document under the 20th edition", async () => {
+    const result = await new Engine({
+      currentYear: 2026,
+      profile: { edition: 20, style: "practitioner" },
+    }).check(TIGHTENED);
+    expect(result.diagnostics.map((d) => d.ruleId)).toContain("RP001");
+  });
+
+  it("flags it in scholarly writing", async () => {
+    const result = await new Engine({
+      currentYear: 2026,
+      profile: { edition: 21, style: "academic" },
+    }).check(TIGHTENED);
+    expect(result.diagnostics.map((d) => d.ruleId)).toContain("RP001");
+  });
+
+  it("still reports inconsistency whatever the edition permits", async () => {
+    // The Mata filing spells the Supreme Court Reporter both ways. Permitting
+    // the tightened form does not permit using both in one document.
+    const result = await new Engine({ currentYear: 2026 }).check(MATA_EXCERPT);
+    expect(result.diagnostics.map((d) => d.ruleId)).toContain("RP003");
+  });
+});
+
+describe("page ranges end to end", () => {
+  it.each(["-", "–", "—", "‒", "‑"])(
+    "reads a pin cite range written with %s",
+    async (dash) => {
+      const result = await engine().check(
+        `Miller v. United Airlines, Inc., 174 F.3d 366, 371${dash}72 (2d Cir. 1999).`,
+      );
+      expect(result.extraction.citations[0]?.pinCite).toBe(`371${dash}72`);
+      // A range inside the opinion is not a pin cite error.
+      expect(result.diagnostics.map((d) => d.ruleId)).not.toContain("ST002");
+    },
+  );
+
+  it("reports a range that repeats digits", async () => {
+    const result = await engine().check(
+      "Miller, 174 F.3d 366, 371-372 (2d Cir. 1999).",
+    );
+    expect(result.diagnostics.map((d) => d.ruleId)).toContain("ST003");
+  });
+
+  it("reports a range that runs backwards", async () => {
+    const result = await engine().check("A v. B, 1 F.3d 300, 380-371 (2d Cir. 1999).");
+    expect(result.diagnostics.map((d) => d.ruleId)).toContain("ST004");
+  });
+
+  it("still catches a pin cite before the first page of a range", async () => {
+    const result = await engine().check("Roe v. Wade, 410 U.S. 113, 99-100 (1973).");
+    expect(result.diagnostics.map((d) => d.ruleId)).toContain("ST002");
   });
 });

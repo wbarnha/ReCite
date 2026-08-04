@@ -1,7 +1,7 @@
 /** Rules about how citations hang together in a document (the `ST` family). */
 
 import type { Diagnostic, ParsedCitation } from "@recite/core";
-import { isShortForm } from "@recite/core";
+import { abbreviateRange, isShortForm, parsePinCite } from "@recite/core";
 
 import type { Rule, RuleContext } from "./rule.js";
 import { diagnose } from "./rule.js";
@@ -86,6 +86,89 @@ export const pinCiteOutOfRange: Rule = {
   },
 };
 
+/**
+ * A page range whose second number is written out in full.
+ *
+ * Bluebook rule 3.2(a): drop repetitious digits from the second number but
+ * always keep the last two, so `371-372` should read `371-72` and
+ * `1204-1208` should read `1204-08`. `98-102` is left alone — the digits do
+ * not line up, so nothing is repetitious.
+ */
+export const pageRangeFormat: Rule = {
+  id: "ST003",
+  name: "page-range-format",
+  summary: "Page range repeats digits the Bluebook drops.",
+  severity: "info",
+
+  check(ctx: RuleContext): Diagnostic[] {
+    const found: Diagnostic[] = [];
+
+    for (const citation of ctx.extraction.citations) {
+      const pin = parsePinCite(citation.pinCite);
+      if (!pin) continue;
+
+      for (const range of pin.ranges) {
+        const written = String(range.to);
+        // `parsePinCite` expands `371-72` to 372, so only a range typed out in
+        // full still has the long form in its raw text.
+        if (!pin.raw.includes(`${range.from}`) || !pin.raw.includes(written)) continue;
+
+        const abbreviated = abbreviateRange(range.from, range.to);
+        if (abbreviated === written) continue;
+
+        found.push(
+          diagnose(
+            pageRangeFormat,
+            citation,
+            `Page range ${range.from}-${range.to} should be written ${range.from}-${abbreviated} — rule 3.2(a) drops repetitious digits but keeps the last two.`,
+            {
+              context: {
+                from: range.from,
+                to: range.to,
+                suggestion: `${range.from}-${abbreviated}`,
+              },
+            },
+          ),
+        );
+      }
+    }
+
+    return found;
+  },
+};
+
+/** A page range that runs backwards — `380-371` cannot be a span of pages. */
+export const reversedPageRange: Rule = {
+  id: "ST004",
+  name: "reversed-page-range",
+  summary: "Page range ends before it begins.",
+  severity: "warning",
+
+  check(ctx: RuleContext): Diagnostic[] {
+    const found: Diagnostic[] = [];
+
+    for (const citation of ctx.extraction.citations) {
+      const pin = parsePinCite(citation.pinCite);
+      if (!pin) continue;
+
+      for (const range of pin.ranges) {
+        if (range.to >= range.from) continue;
+
+        found.push(
+          diagnose(
+            reversedPageRange,
+            citation,
+            `Page range ${range.from}-${range.to} ends before it begins. Check for transposed digits.`,
+            { context: { from: range.from, to: range.to } },
+          ),
+        );
+      }
+    }
+
+    return found;
+  },
+};
+
 /** Where the opinion starts, following short forms back to their source. */
 function startingPage(ctx: RuleContext, citation: ParsedCitation): number | undefined {
   if (citation.kind === "case-reporter") return firstNumber(citation.page);
@@ -101,9 +184,7 @@ function startingPage(ctx: RuleContext, citation: ParsedCitation): number | unde
   return undefined;
 }
 
-/** First integer in a pin cite, tolerating `"371-72"`. */
+/** First integer in a pin cite, tolerating `"371-72"` and `"123, 130"`. */
 function firstNumber(value: string | undefined): number | undefined {
-  if (!value) return undefined;
-  const match = /\d+/.exec(value);
-  return match ? Number(match[0]) : undefined;
+  return parsePinCite(value)?.first;
 }

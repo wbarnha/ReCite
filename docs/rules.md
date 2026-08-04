@@ -10,7 +10,32 @@ spelled. Anything that changes which case, court or year is referenced is
 unsafe, because a confidently wrong citation is worse than a visibly broken one.
 
 Every example below is drawn from the sample document, which is transcribed
-from a real filing. See [testing.md](testing.md) for its provenance.
+from a real filing. See [testing.md](testing.md) for where it came from.
+
+## Which Bluebook
+
+Some rules depend on which edition you are writing to, and on whether you are
+writing a brief or an article. Both are selectable in the app and settable on
+the `Engine`:
+
+```ts
+new Engine({ profile: { edition: 21, style: "practitioner" } });
+```
+
+| Edition    | Style             | Effect                                                               |
+| ---------- | ----------------- | -------------------------------------------------------------------- |
+| 21st, 22nd | court documents   | Reporter abbreviations may be closed up: `119 S.Ct. 662` is accepted |
+| 20th       | either            | Rule 6.1(a) spacing required: `119 S. Ct. 662`                       |
+| any        | scholarly writing | Rule 6.1(a) spacing required                                         |
+
+The allowance is the 21st edition's, and it is a Bluepages rule — it applies
+to court filings, not to law review footnotes. It is also permission rather
+than prescription, so ReCite stops _requiring_ the space rather than
+requiring its removal. `RP003` still fires when a document uses both forms:
+being allowed to tighten is not being allowed to be inconsistent.
+
+The default is the 21st edition for court documents, which is what most people
+checking a brief want.
 
 ---
 
@@ -105,6 +130,17 @@ meant, and neither can ReCite, so it says so instead of picking one.
 An `Id.`, `supra` or short-form citation with no full citation before it. The
 easiest thing to break while editing: move a paragraph and the `Id.` that
 opened it now points at nothing.
+
+### `ST003` page-range-format · info · no fix
+
+A page range that repeats digits the Bluebook drops. Rule 3.2(a) keeps the
+last two digits of the second number and drops the rest when they repeat the
+first: `371-372` should read `371-72`, `1204-1208` should read `1204-08`.
+`98-102` is left alone, because nothing in it is repetitious.
+
+### `ST004` reversed-page-range · warning · no fix
+
+A range that ends before it begins — `380-371`. Usually transposed digits.
 
 ### `ST002` pin-cite-out-of-range · warning · no fix
 

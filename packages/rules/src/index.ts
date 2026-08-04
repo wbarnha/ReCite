@@ -33,7 +33,12 @@ import {
   unknownReporter,
 } from "./reporters.js";
 import type { Rule, RuleContext } from "./rule.js";
-import { pinCiteOutOfRange, unresolvedShortForm } from "./structure.js";
+import {
+  pageRangeFormat,
+  pinCiteOutOfRange,
+  reversedPageRange,
+  unresolvedShortForm,
+} from "./structure.js";
 import {
   ambiguousAuthority,
   caseNameMismatch,
@@ -54,8 +59,10 @@ export {
   implausibleYear,
   inconsistentReporterStyle,
   nonPrecedentialDisposition,
+  pageRangeFormat,
   pinCiteOutOfRange,
   reporterCourtMismatch,
+  reversedPageRange,
   reporterFormat,
   unknownReporter,
   unresolvedShortForm,
@@ -76,6 +83,8 @@ const REGISTRY: readonly Rule[] = [
   ambiguousCourt,
   unresolvedShortForm,
   pinCiteOutOfRange,
+  pageRangeFormat,
+  reversedPageRange,
   nonPrecedentialDisposition,
   databaseOnlyCitation,
   unverifiedAuthority,

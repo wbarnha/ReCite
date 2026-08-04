@@ -51,6 +51,24 @@ the tool is candid about the difference.
 
 Full reference: [docs/rules.md](docs/rules.md).
 
+## Which Bluebook
+
+Pick the edition and the kind of writing; both change what is reported.
+
+From the **21st edition**, a court filing may close up reporter abbreviations
+to save space, so `119 S.Ct. 662` is a legitimate choice rather than an error.
+Under the **20th**, or in **scholarly writing** — where rule 6.1(a) spacing
+governs whatever the edition — the same citation wants `119 S. Ct. 662`.
+
+Permission is not prescription, so ReCite stops _requiring_ the space rather
+than requiring its removal. `RP003` still fires when a document uses both
+forms: being allowed to tighten is not being allowed to be inconsistent.
+
+Page ranges are read with any dash a document might contain — hyphen, en dash,
+em dash, figure dash, non-breaking hyphen — because losing the dash means
+losing the pin cite, and losing the pin cite means the page checks silently
+stop running.
+
 ## Fixing
 
 `Fix` applies only **safe** corrections by default — the ones that change how a
@@ -95,7 +113,7 @@ dependencies; React and Vite live only in the app.
 ```
 packages/
 ├── core/     model, regex parser, reporter + court tables, span patching
-├── rules/    the 17-rule set — the only place that decides "wrong"
+├── rules/    the 19-rule set — the only place that decides "wrong"
 └── engine/   check/fix orchestration
 apps/
 └── web/      the web app and the Word task pane, from one build
@@ -115,21 +133,17 @@ supplies the authority list know nothing about each other.
 ```console
 $ pnpm install
 $ pnpm dev            # web app on :3000
-$ pnpm test           # 260 tests
+$ pnpm test           # 372 tests
 $ pnpm check          # lint + format + types + tests, what CI runs
 $ pnpm build:release  # build, generate manifest.xml, write checksums
 ```
 
-## Provenance
+## Reference data
 
-Written from scratch for this repository. The reporter and court tables were
-compiled independently from public sources — the names of reporters and courts,
-their standard abbreviations and the years they existed are matters of fact
-about the published record. No code or data here is copied or derived from any
-other citation project.
-
-The parser fixtures are transcribed from a public court filing; see
-[docs/testing.md](docs/testing.md).
+The reporter and court tables in `packages/core/src/data/` list abbreviations,
+full names and the years each reporter series and court has been in operation,
+compiled from public sources. The parser fixtures are transcribed from a public
+court filing; see [docs/testing.md](docs/testing.md).
 
 ## Caveats
 

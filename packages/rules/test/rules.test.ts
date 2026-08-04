@@ -1,7 +1,7 @@
 /** The rule set, exercised against both synthetic and real citation text. */
 
 import { parse } from "@recite/core";
-import type { Diagnostic, VerificationResult } from "@recite/core";
+import type { BluebookProfile, Diagnostic, VerificationResult } from "@recite/core";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -15,7 +15,9 @@ import {
   inconsistentReporterStyle,
   makeContext,
   nonPrecedentialDisposition,
+  pageRangeFormat,
   pinCiteOutOfRange,
+  reversedPageRange,
   reporterCourtMismatch,
   reporterFormat,
   runRules,
@@ -33,11 +35,13 @@ function check(
   options: {
     verifications?: Map<number, VerificationResult>;
     currentYear?: number;
+    profile?: BluebookProfile;
   } = {},
 ): Diagnostic[] {
   const ctx = makeContext(parse(text), {
     verifications: options.verifications ?? new Map(),
     currentYear: options.currentYear ?? 2026,
+    ...(options.profile ? { profile: options.profile } : {}),
   });
   return runRules(ctx, rule ? [rule] : undefined);
 }
@@ -46,7 +50,12 @@ const ids = (found: Diagnostic[]) => found.map((d) => d.ruleId);
 
 describe("RP001 reporter-format", () => {
   it("reports unspaced Supreme Court Reporter as a style note with a safe fix", () => {
-    const [found] = check("El Al v. Tseng, 119 S.Ct. 662 (1999).", reporterFormat);
+    // Stated explicitly: under the default 21st-edition court-filing profile
+    // the closed-up form is permitted, so this test asks for the edition that
+    // does require the space.
+    const [found] = check("El Al v. Tseng, 119 S.Ct. 662 (1999).", reporterFormat, {
+      profile: { edition: 20, style: "practitioner" },
+    });
     expect(found?.severity).toBe("info");
     expect(found?.correction?.safety).toBe("safe");
     expect(found?.correction?.replacement).toBe("119 S. Ct. 662");
@@ -64,7 +73,9 @@ describe("RP001 reporter-format", () => {
 
   it("produces a fix that actually yields the canonical text", () => {
     const text = "See 20 L.Ed.2d 835 (1968).";
-    const [found] = check(text, reporterFormat);
+    const [found] = check(text, reporterFormat, {
+      profile: { edition: 20, style: "practitioner" },
+    });
     const { span, replacement } = found!.correction!;
     expect(text.slice(0, span.start) + replacement + text.slice(span.end)).toBe(
       "See 20 L. Ed. 2d 835 (1968).",
@@ -389,5 +400,130 @@ describe("registry", () => {
       currentYear: 2026,
     });
     expect(() => runRules(ctx, [exploding, reporterFormat])).not.toThrow();
+  });
+});
+
+describe("Bluebook profiles", () => {
+  const profiled = (
+    text: string,
+    profile: { edition: 20 | 21 | 22; style: "practitioner" | "academic" },
+  ) =>
+    runRules(makeContext(parse(text), { currentYear: 2026, profile }), [
+      reporterFormat,
+    ]);
+
+  const TIGHTENED = "El Al v. Tseng, 119 S.Ct. 662 (1999).";
+
+  it("accepts a tightened abbreviation in a 21st-edition court filing", () => {
+    // The 21st edition lets briefs close up reporter abbreviations to save
+    // space, so this is a choice rather than a mistake.
+    expect(profiled(TIGHTENED, { edition: 21, style: "practitioner" })).toEqual([]);
+  });
+
+  it("accepts it under the 22nd edition too", () => {
+    expect(profiled(TIGHTENED, { edition: 22, style: "practitioner" })).toEqual([]);
+  });
+
+  it("reports it under the 20th edition", () => {
+    const [found] = profiled(TIGHTENED, { edition: 20, style: "practitioner" });
+    expect(found?.ruleId).toBe("RP001");
+    expect(found?.context?.variant).toBe("tightened");
+  });
+
+  it("reports it in scholarly writing whatever the edition", () => {
+    expect(profiled(TIGHTENED, { edition: 21, style: "academic" })).toHaveLength(1);
+    expect(profiled(TIGHTENED, { edition: 22, style: "academic" })).toHaveLength(1);
+  });
+
+  it("names the profile in the message so the reader knows which rule applied", () => {
+    const [found] = profiled(TIGHTENED, { edition: 21, style: "academic" });
+    expect(found?.message).toContain("scholarly writing");
+  });
+
+  it("still reports extra spaces, which no edition permits", () => {
+    const [found] = profiled("Roe v. Wade, 410 U. S. 113 (1973).", {
+      edition: 22,
+      style: "practitioner",
+    });
+    expect(found?.context?.variant).toBe("loosened");
+  });
+
+  it("still reports a substantively different abbreviation", () => {
+    const [found] = profiled("Baz v. Qux, 12 Fed. Rep. 34 (1882).", {
+      edition: 22,
+      style: "practitioner",
+    });
+    expect(found?.context?.variant).toBe("different");
+    expect(found?.severity).toBe("warning");
+  });
+
+  it("still reports mixing both spellings, which stays wrong", () => {
+    // The edition permits tightening; it does not permit inconsistency.
+    const found = runRules(
+      makeContext(
+        parse("Tseng, 525 U.S. 155, 119 S.Ct. 662 (1999). Id. at 166, 119 S. Ct. 662."),
+        { currentYear: 2026, profile: { edition: 21, style: "practitioner" } },
+      ),
+      [inconsistentReporterStyle],
+    );
+    expect(ids(found)).toEqual(["RP003"]);
+  });
+
+  it("defaults to the 21st edition for court documents", () => {
+    // Most people reaching for this are checking a brief.
+    expect(check(TIGHTENED, reporterFormat)).toEqual([]);
+  });
+});
+
+describe("ST003 page-range-format", () => {
+  it("reports a range that repeats digits", () => {
+    const [found] = check(
+      "Miller, 174 F.3d 366, 371-372 (2d Cir. 1999).",
+      pageRangeFormat,
+    );
+    expect(found?.ruleId).toBe("ST003");
+    expect(found?.context?.suggestion).toBe("371-72");
+  });
+
+  it("reports a four-digit range", () => {
+    const [found] = check(
+      "A v. B, 1 F.3d 1200, 1204-1208 (2d Cir. 1999).",
+      pageRangeFormat,
+    );
+    expect(found?.context?.suggestion).toBe("1204-08");
+  });
+
+  it("accepts a correctly abbreviated range", () => {
+    expect(
+      check("Miller, 174 F.3d 366, 371-72 (2d Cir. 1999).", pageRangeFormat),
+    ).toEqual([]);
+  });
+
+  it("accepts a range whose digits do not line up", () => {
+    // `98-102` has nothing repetitious to drop.
+    expect(check("A v. B, 1 F.3d 90, 98-102 (2d Cir. 1999).", pageRangeFormat)).toEqual(
+      [],
+    );
+  });
+
+  it("says nothing about a single page", () => {
+    expect(check("Iqbal, 556 U.S. 662, 678 (2009).", pageRangeFormat)).toEqual([]);
+  });
+});
+
+describe("ST004 reversed-page-range", () => {
+  it("reports a range that runs backwards", () => {
+    const [found] = check(
+      "A v. B, 1 F.3d 300, 380-371 (2d Cir. 1999).",
+      reversedPageRange,
+    );
+    expect(found?.ruleId).toBe("ST004");
+    expect(found?.context).toMatchObject({ from: 380, to: 371 });
+  });
+
+  it("accepts a forward range", () => {
+    expect(
+      check("Miller, 174 F.3d 366, 371-72 (2d Cir. 1999).", reversedPageRange),
+    ).toEqual([]);
   });
 });

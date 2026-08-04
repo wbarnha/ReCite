@@ -26,11 +26,9 @@ from Microsoft — and which is documented in
 [docs/security.md](docs/security.md) as the one asset not covered by
 Subresource Integrity.
 
-**Keep the provenance clean.** Everything here is written from scratch. Do not
-copy code or data files from other citation projects, however permissive their
-licence. Reporter names, court names, standard abbreviations and publication
-years are facts and may be compiled from public sources; someone else's
-expression of them may not be.
+**Cite a source for reference data.** When you add a reporter or a court, note
+in the pull request where the abbreviation and the dates came from, so the next
+person can check them.
 
 ## Adding a rule
 

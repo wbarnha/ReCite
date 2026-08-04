@@ -1,5 +1,6 @@
 /** Shared model, regex parser and reference data for ReCite. */
 
+export * from "./bluebook.js";
 export * from "./model.js";
 export * from "./parse.js";
 export * from "./patterns.js";

@@ -6,8 +6,15 @@
  * and the Word task pane share behaviour without sharing layout.
  */
 
-import type { AuthorityRecord, Correction, Diagnostic } from "@recite/core";
-import { CorpusProvider } from "@recite/core";
+import type {
+  AuthorityRecord,
+  BluebookEdition,
+  BluebookProfile,
+  CitationStyle,
+  Correction,
+  Diagnostic,
+} from "@recite/core";
+import { CorpusProvider, DEFAULT_PROFILE } from "@recite/core";
 import type { CheckResult } from "@recite/engine";
 import { Engine, fixableCorrections } from "@recite/engine";
 import { useCallback, useMemo, useRef, useState } from "react";
@@ -30,6 +37,7 @@ export function useReCite({ host, corpus }: UseReCiteOptions) {
   // real cases, which teaches people to ignore the rule that matters most.
   const [useCorpus, setUseCorpus] = useState(false);
   const [allowUnsafe, setAllowUnsafe] = useState(false);
+  const [profile, setProfile] = useState<BluebookProfile>(DEFAULT_PROFILE);
 
   // Held in a ref so `check` does not need it in its dependency list and thus
   // does not change identity on every keystroke.
@@ -39,12 +47,13 @@ export function useReCite({ host, corpus }: UseReCiteOptions) {
   const engine = useMemo(
     () =>
       new Engine({
+        profile,
         provider:
           useCorpus && corpus?.length
             ? new CorpusProvider([...corpus], "your authority list")
             : undefined,
       }),
-    [useCorpus, corpus],
+    [useCorpus, corpus, profile],
   );
 
   const check = useCallback(async () => {
@@ -128,6 +137,11 @@ export function useReCite({ host, corpus }: UseReCiteOptions) {
     setUseCorpus,
     allowUnsafe,
     setAllowUnsafe,
+    profile,
+    setEdition: (edition: BluebookEdition) =>
+      setProfile((current) => ({ ...current, edition })),
+    setStyle: (style: CitationStyle) =>
+      setProfile((current) => ({ ...current, style })),
     check,
     fixAll,
     applyOne,

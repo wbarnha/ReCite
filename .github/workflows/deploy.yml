@@ -82,6 +82,18 @@ jobs:
           failed=0
           while read -r digest path; do
             [ -z "$path" ] && continue
+
+            # The checksum file is fetched over the network, so treat its
+            # contents as untrusted: a path that escapes the work directory
+            # would let a tampered file write anywhere the runner can.
+            case "$path" in
+              /*|*..*) echo "::error::refusing suspicious path: $path"; failed=1; continue ;;
+            esac
+            case "$digest" in
+              [0-9a-f]*) ;;
+              *) echo "::error::not a sha256 digest: $digest"; failed=1; continue ;;
+            esac
+
             mkdir -p "$work/$(dirname "$path")"
             if ! curl -fsSL "$base/$path" -o "$work/$path"; then
               echo "::error::could not fetch $path"

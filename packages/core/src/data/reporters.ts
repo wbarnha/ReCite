@@ -1,10 +1,8 @@
 /**
  * Reporter reference data.
  *
- * Compiled independently for this project from public sources: reporter names,
- * their standard abbreviations, and the years each series was published are
- * matters of fact about the published record, not anyone's proprietary
- * database. Nothing here is derived from another project's data files.
+ * Reporter names, their standard abbreviations, and the years each series was
+ * published, compiled from public sources.
  *
  * Coverage is United States federal courts plus the regional reporters and the
  * larger state series — enough to check ordinary litigation writing. It is

@@ -1,6 +1,7 @@
 /** What a rule is, and what it gets to look at. */
 
 import type {
+  BluebookProfile,
   Correction,
   Diagnostic,
   Extraction,
@@ -10,6 +11,7 @@ import type {
   Span,
   VerificationResult,
 } from "@recite/core";
+import { DEFAULT_PROFILE } from "@recite/core";
 
 /** Everything a rule may consult. Rules must not reach outside it. */
 export interface RuleContext {
@@ -18,6 +20,8 @@ export interface RuleContext {
   readonly verifications: ReadonlyMap<number, VerificationResult>;
   /** Injected so that "is this year in the future?" is testable. */
   readonly currentYear: number;
+  /** Which edition and style of the Bluebook to check against. */
+  readonly profile: BluebookProfile;
 }
 
 export interface Rule {
@@ -37,12 +41,14 @@ export function makeContext(
   options: {
     verifications?: ReadonlyMap<number, VerificationResult>;
     currentYear?: number;
+    profile?: BluebookProfile;
   } = {},
 ): RuleContext {
   return {
     extraction,
     verifications: options.verifications ?? new Map(),
     currentYear: options.currentYear ?? new Date().getFullYear(),
+    profile: options.profile ?? DEFAULT_PROFILE,
   };
 }
 

@@ -12,6 +12,7 @@ import { createRoot } from "react-dom/client";
 
 import { Findings } from "./components/Findings.js";
 import { Footer } from "./components/Footer.js";
+import { ProfilePicker } from "./components/ProfilePicker.js";
 import { WordHost } from "./host.js";
 import { SAMPLE_CORPUS } from "./sample.js";
 import "./styles.css";
@@ -45,6 +46,13 @@ function TaskPane() {
           Fix {recite.fixableCount || ""}
         </button>
       </div>
+
+      <ProfilePicker
+        profile={recite.profile}
+        onEdition={recite.setEdition}
+        onStyle={recite.setStyle}
+        disabled={recite.busy}
+      />
 
       <div className="toolbar">
         <label className="checkbox">

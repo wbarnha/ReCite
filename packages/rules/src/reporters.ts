@@ -2,10 +2,13 @@
 
 import type { Diagnostic } from "@recite/core";
 import {
+  allowsTightenedAbbreviations,
   canonicalForVariation,
+  describeProfile,
   differsOnlyCosmetically,
   findReporter,
   isKnownReporter,
+  spacingVariant,
   squash,
   suggestReporters,
 } from "@recite/core";
@@ -29,30 +32,40 @@ export const reporterFormat: Rule = {
   check(ctx: RuleContext): Diagnostic[] {
     const found: Diagnostic[] = [];
 
+    const tighteningAllowed = allowsTightenedAbbreviations(ctx.profile);
+
     for (const citation of ctx.extraction.citations) {
       const written = citation.reporter;
       const canonical = citation.reporterCanonical;
       if (!written || !canonical || written === canonical) continue;
 
-      const cosmetic = differsOnlyCosmetically(written, canonical);
+      const variant = spacingVariant(written, canonical);
+
+      // The 21st edition lets court filings close up reporter abbreviations to
+      // save space, so `119 S.Ct. 662` is a legitimate choice there — not an
+      // error to be corrected. Adding spaces was never permitted, and a
+      // different abbreviation is a different question entirely.
+      if (variant === "tightened" && tighteningAllowed) continue;
+
       const corrected = citation.text.replace(written, canonical);
+      const cosmetic = differsOnlyCosmetically(written, canonical);
+
+      const message =
+        variant === "different"
+          ? `${JSON.stringify(written)} is a non-standard abbreviation for ${JSON.stringify(canonical)}.`
+          : variant === "tightened"
+            ? `${JSON.stringify(written)} closes up ${JSON.stringify(canonical)}. ${describeProfile(ctx.profile)} keeps the space.`
+            : `${JSON.stringify(citation.text)} should be written ${JSON.stringify(corrected)} — spacing does not match the standard form.`;
 
       found.push(
-        diagnose(
-          reporterFormat,
-          citation,
-          cosmetic
-            ? `${JSON.stringify(citation.text)} should be written ${JSON.stringify(corrected)} — spacing does not match the standard form.`
-            : `${JSON.stringify(written)} is a non-standard abbreviation for ${JSON.stringify(canonical)}.`,
-          {
-            severity: cosmetic ? "info" : "warning",
-            // Only the spelling changes; the authority is identical.
-            replacement: corrected,
-            safety: "safe",
-            fixDescription: `Normalise to ${JSON.stringify(corrected)}`,
-            context: { written, canonical, cosmetic },
-          },
-        ),
+        diagnose(reporterFormat, citation, message, {
+          severity: cosmetic ? "info" : "warning",
+          // Only the spelling changes; the authority is identical.
+          replacement: corrected,
+          safety: "safe",
+          fixDescription: `Normalise to ${JSON.stringify(corrected)}`,
+          context: { written, canonical, variant, profile: ctx.profile },
+        }),
       );
     }
 
@@ -82,12 +95,32 @@ export const unknownReporter: Rule = {
     const shape =
       /\b(\d{1,4})\s+([A-Z][A-Za-z.'’ ]{0,22}?\.(?:\s?\d?(?:d|th|st|rd))?)\s+(\d{1,5})\b/g;
 
+    // Both the matches and the citations run in document order, so a single
+    // moving pointer answers "is this already claimed?" in linear time.
+    // Re-scanning every citation per match is quadratic, and a brief with a
+    // few thousand citations is not unusual.
+    const claimedSpans = [...citations]
+      .map((c) => c.span)
+      .sort((a, b) => a.start - b.start);
+    let cursor = 0;
+
     let match: RegExpExecArray | null;
     while ((match = shape.exec(text)) !== null) {
       const start = match.index;
       const end = start + match[0].length;
 
-      const claimed = citations.some((c) => c.span.start < end && start < c.span.end);
+      while (cursor < claimedSpans.length && claimedSpans[cursor]!.end <= start)
+        cursor++;
+
+      let claimed = false;
+      for (let i = cursor; i < claimedSpans.length; i++) {
+        const span = claimedSpans[i]!;
+        if (span.start >= end) break;
+        if (span.start < end && start < span.end) {
+          claimed = true;
+          break;
+        }
+      }
       if (claimed) continue;
 
       const token = match[2]?.trim();

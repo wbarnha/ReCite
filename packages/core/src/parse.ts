@@ -204,8 +204,6 @@ function collectMatches(
       const start = match.index;
       const end = start + match[0].length;
 
-      // `supra` captures an optional leading name; anchor the citation at the
-      // word itself so the span is what a reader would point at.
       const candidate: RawMatch = {
         kind,
         start,
@@ -275,7 +273,7 @@ function assemble(
         citations.push({
           ...base,
           fullSpan: base.span,
-          caseName: entry.groups.name?.trim(),
+          caseName: antecedentBefore(text, entry.start),
         });
         break;
     }
@@ -362,9 +360,9 @@ function enrich(
 
       const between = text.slice(current.span.end, next.span.start);
       const pin = patterns.pinCite.exec(between);
-      if (pin) {
+      if (pin?.groups?.pin) {
         // `, 598, ` — a pin cite for `current`, then another citation.
-        out[cursor] = { ...current, pinCite: pin.groups?.pin?.trim() };
+        out[cursor] = { ...current, pinCite: pin.groups.pin.replace(/\s+/g, "") };
       } else if (!patterns.parallelJoin.test(between)) {
         break;
       }
@@ -378,9 +376,12 @@ function enrich(
     // Trailing pin cite and parenthetical belong to the final member.
     let tail = last.span.end;
     const afterLast = text.slice(tail, Math.min(text.length, tail + 240));
-    const trailingPin = /^\s*,\s*(\d{1,5}(?:\s*[-–—]\s*\d{1,5})?)/.exec(afterLast);
-    if (trailingPin?.[1]) {
-      out[cursor] = { ...last, pinCite: trailingPin[1].replace(/\s+/g, "") };
+    const trailingPin = patterns.trailingPinCite.exec(afterLast);
+    const trailingPinText = trailingPin?.groups?.pin;
+    if (trailingPin && trailingPinText) {
+      // Whitespace is squeezed out — a range split by a line wrap arrives as
+      // `371-\n72` and means the same thing as `371-72`.
+      out[cursor] = { ...last, pinCite: trailingPinText.replace(/\s+/g, "") };
       tail += trailingPin[0].length;
     }
 
@@ -589,6 +590,47 @@ function walkBackForParty(left: string): string | undefined {
 /** A word reduced to its letters, for comparison against the word lists. */
 function bareWord(word: string): string {
   return word.toLowerCase().replace(/[^a-z]/g, "");
+}
+
+/** How far back to look for the name in front of a `supra`. */
+const ANTECEDENT_WINDOW = 80;
+
+/**
+ * The case name immediately before a `supra`.
+ *
+ * Done by walking a short, fixed window rather than by regex. The regex form
+ * of this — an optional run of capitalised words before the literal — is
+ * quadratic, because every failed position backtracks through the whole run.
+ * A bounded backwards walk is linear in the document and cannot be made to
+ * blow up by any input.
+ */
+export function antecedentBefore(text: string, offset: number): string | undefined {
+  const window = text.slice(Math.max(0, offset - ANTECEDENT_WINDOW), offset);
+
+  // `Ghost Corp., supra` and `Ghost Corp. supra` both occur.
+  const body = window.replace(/[\s,]+$/, "");
+  if (!body) return undefined;
+
+  const words = body.split(/\s+/).filter(Boolean);
+  const taken: string[] = [];
+
+  // Bounded: a case name short form is a handful of words at most.
+  for (let i = words.length - 1; i >= 0 && taken.length < 8; i--) {
+    const word = words[i];
+    if (!word || !/^["“'(]?[A-Z]/.test(word)) break;
+    taken.unshift(word);
+  }
+
+  while (taken.length && CITATION_SIGNALS.has(bareWord(taken[0]!))) taken.shift();
+  if (!taken.length) return undefined;
+
+  return (
+    taken
+      .join(" ")
+      .replace(/^["“']+/, "")
+      .replace(/,$/, "")
+      .trim() || undefined
+  );
 }
 
 function endsSentence(word: string): boolean {

@@ -3,6 +3,22 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      No script, style, image or connection may come from anywhere but this
+      origin and Microsoft's Office CDN. The page never contacts a server of
+      its own, so `connect-src` is closed entirely; a bug or a compromised
+      dependency cannot quietly post the document somewhere.
+
+      `frame-ancestors` is deliberately absent: it is ignored when delivered in
+      a meta element, so including it would only log an error. Framing has to
+      be restricted by an HTTP header, which GitHub Pages cannot set — and the
+      Word task pane is itself framed by Office, so the policy would need to
+      permit that anyway. See docs/security.md.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self' https://appsforoffice.microsoft.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'none'; form-action 'none'; base-uri 'none'"
+    />
     <title>ReCite for Word</title>
     <!--
       Office.js must come from Microsoft's CDN: the host validates that the

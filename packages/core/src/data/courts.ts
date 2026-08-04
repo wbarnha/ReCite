@@ -1,10 +1,8 @@
 /**
  * Court reference data.
  *
- * Compiled independently for this project from public sources: the names of
- * United States courts, their standard Bluebook abbreviations, and the years
- * they have existed. Nothing here is derived from another project's data
- * files.
+ * The names of United States courts, their standard Bluebook abbreviations,
+ * and the years they have existed, compiled from public sources.
  *
  * `abbrev` is the form a citation uses. `aliases` are other spellings seen in
  * the wild — spelled-out names, older forms — which is what lets ReCite

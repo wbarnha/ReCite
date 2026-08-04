@@ -12,6 +12,7 @@
  */
 
 import type {
+  BluebookProfile,
   Correction,
   Diagnostic,
   Extraction,
@@ -20,7 +21,7 @@ import type {
   VerificationProvider,
   VerificationResult,
 } from "@recite/core";
-import { applyCorrections, lineDiff, parse } from "@recite/core";
+import { applyCorrections, DEFAULT_PROFILE, lineDiff, parse } from "@recite/core";
 import type { Rule } from "@recite/rules";
 import { makeContext, runRules, selectRules } from "@recite/rules";
 
@@ -46,6 +47,8 @@ export interface EngineOptions {
   readonly parseOptions?: ParseOptions;
   /** Injected for deterministic tests. */
   readonly currentYear?: number;
+  /** Which Bluebook edition and style to check against. */
+  readonly profile?: BluebookProfile;
 }
 
 export interface FixOptions {
@@ -61,11 +64,13 @@ export class Engine {
   private readonly provider?: VerificationProvider;
   private readonly parseOptions: ParseOptions;
   private readonly currentYear: number;
+  private readonly profile: BluebookProfile;
 
   constructor(options: EngineOptions = {}) {
     this.provider = options.provider;
     this.parseOptions = options.parseOptions ?? {};
     this.currentYear = options.currentYear ?? new Date().getFullYear();
+    this.profile = options.profile ?? DEFAULT_PROFILE;
     this.rules =
       options.rules ?? selectRules({ includeVerification: Boolean(options.provider) });
   }
@@ -90,6 +95,7 @@ export class Engine {
     const ctx = makeContext(extraction, {
       verifications,
       currentYear: this.currentYear,
+      profile: this.profile,
     });
 
     return {
