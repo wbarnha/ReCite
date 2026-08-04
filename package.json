@@ -1,0 +1,41 @@
+{
+  "name": "recite-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Find and fix broken case law citations, in the browser and in Microsoft Word.",
+  "license": "BSD-2-Clause",
+  "type": "module",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "pnpm -r --filter \"./packages/*\" build && pnpm --filter @recite/web build",
+    "build:release": "pnpm build && pnpm manifest && pnpm checksums",
+    "manifest": "tsx tools/manifest/generate.ts",
+    "checksums": "tsx tools/integrity/generate.ts",
+    "verify:checksums": "tsx tools/integrity/verify.ts",
+    "dev": "pnpm --filter @recite/web dev",
+    "preview": "pnpm --filter @recite/web preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "coverage": "vitest run --coverage",
+    "typecheck": "tsc --build --force",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.15.0",
+    "@types/node": "^22.9.0",
+    "@vitest/coverage-v8": "^2.1.5",
+    "eslint": "^9.15.0",
+    "prettier": "^3.3.3",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3",
+    "typescript-eslint": "^8.15.0",
+    "vitest": "^2.1.5"
+  }
+}

@@ -1,0 +1,109 @@
+/** Rules about how citations hang together in a document (the `ST` family). */
+
+import type { Diagnostic, ParsedCitation } from "@recite/core";
+import { isShortForm } from "@recite/core";
+
+import type { Rule, RuleContext } from "./rule.js";
+import { diagnose } from "./rule.js";
+
+const SHORT_FORM_LABEL: Record<string, string> = {
+  id: "An `Id.` citation",
+  supra: "A `supra` citation",
+  "short-form": "A short-form citation",
+};
+
+/**
+ * `Id. at 45` with no full citation before it to attach to.
+ *
+ * Short forms are the easiest thing to break while editing: move a paragraph
+ * and the `Id.` that opened it now points at the wrong case, or at nothing.
+ */
+export const unresolvedShortForm: Rule = {
+  id: "ST001",
+  name: "unresolved-short-form",
+  summary: "Short-form citation has no antecedent full citation.",
+  severity: "error",
+
+  check(ctx: RuleContext): Diagnostic[] {
+    const found: Diagnostic[] = [];
+
+    for (const citation of ctx.extraction.citations) {
+      if (!isShortForm(citation) || citation.resourceKey) continue;
+
+      const label = SHORT_FORM_LABEL[citation.kind] ?? "A short-form citation";
+      const hint = citation.caseName
+        ? ` It appears to refer to ${JSON.stringify(citation.caseName)}, which is not cited in full anywhere earlier.`
+        : " Cite the authority in full the first time it appears.";
+
+      found.push(
+        diagnose(
+          unresolvedShortForm,
+          citation,
+          `${label} (${JSON.stringify(citation.text)}) does not follow any full citation.${hint}`,
+          { context: { kind: citation.kind, antecedent: citation.caseName } },
+        ),
+      );
+    }
+
+    return found;
+  },
+};
+
+/**
+ * A pin cite that precedes the page the opinion starts on.
+ *
+ * `410 U.S. 113, 99` cannot be right: page 99 comes before the case does.
+ * Only the lower bound is checkable without a database — where an opinion
+ * *ends* is not knowable offline — but transposed digits usually trip this.
+ */
+export const pinCiteOutOfRange: Rule = {
+  id: "ST002",
+  name: "pin-cite-out-of-range",
+  summary: "Pin cite points at a page before the opinion begins.",
+  severity: "warning",
+
+  check(ctx: RuleContext): Diagnostic[] {
+    const found: Diagnostic[] = [];
+
+    for (const citation of ctx.extraction.citations) {
+      const pin = firstNumber(citation.pinCite);
+      if (pin === undefined) continue;
+
+      const firstPage = startingPage(ctx, citation);
+      if (firstPage === undefined || pin >= firstPage) continue;
+
+      found.push(
+        diagnose(
+          pinCiteOutOfRange,
+          citation,
+          `Pin cite ${pin} is before page ${firstPage}, where the opinion starts.`,
+          { context: { pinCite: pin, firstPage } },
+        ),
+      );
+    }
+
+    return found;
+  },
+};
+
+/** Where the opinion starts, following short forms back to their source. */
+function startingPage(ctx: RuleContext, citation: ParsedCitation): number | undefined {
+  if (citation.kind === "case-reporter") return firstNumber(citation.page);
+
+  // For `516 F.3d at 1254` the parsed page *is* the pin cite, so the real
+  // first page has to come from the full citation it resolves to.
+  if (!citation.resourceKey) return undefined;
+  const members = ctx.extraction.resources.get(citation.resourceKey) ?? [];
+  for (const index of members) {
+    const candidate = ctx.extraction.citations[index];
+    if (candidate?.kind === "case-reporter") return firstNumber(candidate.page);
+  }
+  return undefined;
+}
+
+/** First integer in a pin cite, tolerating `"371-72"`. */
+function firstNumber(value: string | undefined): number | undefined {
+  if (!value) return undefined;
+  const match = /\d+/.exec(value);
+  return match ? Number(match[0]) : undefined;
+}

@@ -10,63 +10,93 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  # The test suite must never reach the CourtListener API. Anything that would
-  # try is either mocked or marked `network` and deselected below.
-  RECITE_OFFLINE: "1"
-
 jobs:
   static:
-    name: lint + types
+    name: lint, types, format
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
         with:
-          enable-cache: true
-      - run: uv sync --all-packages
-      - run: uv run ruff check --output-format=github .
-      - run: uv run ruff format --check .
-      - run: uv run mypy packages
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm format:check
+      - run: pnpm typecheck
 
   test:
-    name: pytest (py${{ matrix.python-version }})
+    name: tests (node ${{ matrix.node }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12", "3.13"]
+        node: [20, 22]
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
         with:
-          enable-cache: true
-      - run: uv sync --all-packages --python ${{ matrix.python-version }}
-      - run: uv run pytest -m "not network" --cov=recite --cov-report=xml
+          node-version: ${{ matrix.node }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm coverage
       - uses: actions/upload-artifact@v4
-        if: matrix.python-version == '3.12'
+        if: matrix.node == 22
         with:
           name: coverage
-          path: coverage.xml
+          path: coverage/lcov.info
 
-  self-check:
-    name: recite check (dogfood)
+  build:
+    name: build and verify checksums
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
         with:
-          enable-cache: true
-      - run: uv sync --all-packages
-      # The example brief is deliberately full of broken citations, so a clean
-      # exit would mean the linter stopped working.
-      - name: Example brief must still report problems
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build:release
+
+      # The build must be verifiable by the same tool anyone else would use,
+      # not only by our own script.
+      - name: Verify with our tool
+        run: pnpm verify:checksums
+      - name: Verify with sha256sum
+        working-directory: apps/web/dist
+        run: sha256sum -c checksums.sha256
+
+      - name: Every local asset carries an integrity hash
         run: |
-          if uv run recite check examples/brief.txt --format text; then
-            echo "::error::expected recite check to fail on examples/brief.txt"
-            exit 1
-          fi
-      - name: SARIF output is well-formed
+          for page in apps/web/dist/index.html apps/web/dist/taskpane.html; do
+            unpinned=$(grep -oE '<(script|link)[^>]*(src|href)="[^"]*assets/[^"]*"[^>]*>' "$page" \
+              | grep -v 'integrity=' || true)
+            if [ -n "$unpinned" ]; then
+              echo "::error file=$page::asset without subresource integrity:"
+              echo "$unpinned"
+              exit 1
+            fi
+          done
+
+      - name: Manifest is well-formed and points at HTTPS
         run: |
-          uv run recite check examples/brief.txt --format sarif > recite.sarif || true
-          uv run python -c "import json,sys; json.load(open('recite.sarif'))"
+          python3 -c "
+          import sys, xml.etree.ElementTree as ET
+          tree = ET.parse('apps/web/dist/manifest.xml')
+          ns = {'o': 'http://schemas.microsoft.com/office/appforoffice/1.1'}
+          version = tree.find('o:Version', ns).text
+          assert version.count('.') == 3, f'Office needs a four-part version, got {version}'
+          for element in tree.iter():
+              value = element.get('DefaultValue', '')
+              if value.startswith('http') and not value.startswith('https://'):
+                  sys.exit(f'non-HTTPS URL in manifest: {value}')
+          print(f'manifest.xml OK, version {version}')
+          "
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: site
+          path: apps/web/dist

@@ -1,0 +1,27 @@
+{
+  "name": "@recite/web",
+  "version": "1.0.0",
+  "private": true,
+  "description": "The ReCite web app and Microsoft Word task pane.",
+  "license": "BSD-2-Clause",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --build && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@recite/core": "workspace:*",
+    "@recite/engine": "workspace:*",
+    "@recite/rules": "workspace:*",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/office-js": "^1.0.377",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.3",
+    "vite": "^5.4.11"
+  }
+}

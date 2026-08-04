@@ -1,152 +1,146 @@
 # ReCite
 
-**Find and fix broken case law citations.** ReCite is a linter for legal
-writing: it reads a brief or an opinion, tells you which citations are wrong,
-and — where it can do so safely — corrects them.
+**Find and fix broken case law citations** — in a browser tab, or inside
+Microsoft Word. A linter for legal writing: it reads a brief, tells you which
+citations are wrong, and corrects the ones it can correct safely.
 
-It is built on the [Free Law Project](https://free.law)'s citation tooling:
+Everything runs locally. There is no server, and no document text is uploaded.
 
-| Library | What ReCite uses it for |
-| --- | --- |
-| [eyecite](https://github.com/freelawproject/eyecite) | finding citations and tying `Id.`/`supra` back to the case they mean |
-| [reporters-db](https://github.com/freelawproject/reporters-db) | canonical reporter abbreviations and the years each edition covers |
-| [courts-db](https://github.com/freelawproject/courts-db) | court identifiers and Bluebook court abbreviations |
-| [CourtListener API](https://www.courtlistener.com/help/api/rest/citation-lookup/) | confirming a cited case actually exists |
-
-```console
-$ recite check brief.txt
-brief.txt
-  16:64  info    RP001  '123 F. 3d 456' should be written '123 F.3d 456' — spacing
-                        and punctuation do not match the standard form.
-  23:27  error   DT001  F.3d was published 1993–present, but this cites 1950.
-                        A 1950 case in this series would be in 'F.2d'.
-  30:17  error   CT002  'U.S.' only reports the Supreme Court of the United States,
-                        but the parenthetical names Court of Appeals for the Ninth Circuit.
-  33:50  error   ST001  A `supra` citation does not follow any full citation.
-
-6 errors, 2 warnings, 3 infos across 10 citations in 1 file.
-3 fixable with recite fix; 4 more with --unsafe (review these).
-```
+|                      |                                                 |
+| -------------------- | ----------------------------------------------- |
+| Web app              | <https://wbarnha.github.io/ReCite/>             |
+| Word add-in manifest | <https://wbarnha.github.io/ReCite/manifest.xml> |
+| Version              | `1.0.0.0`                                       |
 
 ## Why
 
-A citation can be wrong in ways a spell-checker will never see. `999 F.3d 1
-(2d Cir. 1950)` is impossible — the Federal Reporter's third series did not
-exist until 1993 — but it reads perfectly. `200 U.S. 1 (9th Cir. 1906)` puts a
-circuit court in the Supreme Court's reporter. And a citation can be flawless
-in form and still refer to no case at all, which is exactly the failure mode of
-a hallucinated citation.
+A citation can be wrong in ways a spell-checker will never see.
 
-Checking those by hand is slow and easy to skip. ReCite turns them into a
-command you can run in CI.
+`999 F.3d 1 (2d Cir. 1950)` is impossible — the Federal Reporter's third series
+did not exist until 1993 — but it reads perfectly. `200 U.S. 1 (9th Cir. 1906)`
+puts a circuit court in the Supreme Court's reporter. `2013 IL App (1st)
+111279-U` is an unpublished order that may not be cited as authority at all,
+and nothing about its shape says so.
 
-## Install
-
-```console
-git clone https://github.com/wbarnha/ReCite && cd ReCite
-uv sync --all-packages
-uv run recite check examples/brief.txt
-```
-
-Verification against CourtListener needs a free API token:
-
-```console
-export COURTLISTENER_API_TOKEN=...
-recite check brief.txt --verify
-```
-
-Everything else works with no network at all.
-
-## Use
-
-```console
-recite check brief.txt                    # report problems, exit 1 on errors
-recite fix brief.txt                      # show what would change
-recite fix brief.txt --write              # apply formatting fixes
-recite fix brief.txt --write --unsafe     # also apply substantive fixes
-recite check brief.txt --format sarif     # annotate a pull request
-pdftotext brief.pdf - | recite check -    # read from stdin
-```
-
-`recite fix` applies only *safe* corrections by default — the ones that change
-how a citation is spelled but not which authority it points to. Anything that
-changes the case, court or year is held back behind `--unsafe`, because a
-confidently wrong citation is worse than a visibly broken one.
+And a citation can be flawless in form and refer to no case whatsoever, which
+is exactly the failure mode of a fabricated one. ReCite catches the first three
+kinds with no network access at all; the fourth needs an authority list, and
+the tool is candid about the difference.
 
 ## What it checks
 
-| | Rule | Catches |
-| --- | --- | --- |
-| `RP001` | reporter-format | `123 F. 3d 456`, `550 US 544`, `12 Fed. Rep. 34` |
-| `RP002` | ambiguous-reporter | an abbreviation several reporter series share |
-| `RP003` | unrecognized-reporter | `12 Cal. Rprt. 3d 45` — a reporter that does not exist |
-| `DT001` | year-outside-edition | `999 F.3d 1 (1950)` — the series did not exist yet |
-| `DT002` | implausible-year | a decision dated in the future |
-| `CT001` | court-abbreviation | `(Southern District of New York 1990)` |
-| `CT002` | reporter-court-mismatch | `200 U.S. 1 (9th Cir. 1906)` |
-| `CT003` | court-did-not-exist | a court cited before it was created |
-| `ST001` | unresolved-short-form | `Id.` or `supra` with nothing to point back to |
-| `ST002` | pin-cite-out-of-range | `410 U.S. 113, 99` — the pin precedes the first page |
-| `VF001` | unknown-authority | a citation in no database — the hallucination check |
-| `VF002` | ambiguous-authority | a citation matching several cases |
-| `VF003` | case-name-mismatch | a real citation attached to the wrong case name |
-| `VF004` | year-mismatch | a decision year the database disagrees with |
+|         | Rule                         | Catches                                                |
+| ------- | ---------------------------- | ------------------------------------------------------ |
+| `RP001` | reporter-format              | `119 S.Ct. 662`, `20 L.Ed.2d 835`, `12 Fed. Rep. 34`   |
+| `RP002` | unknown-reporter             | `12 Cal. Rprt. 3d 45` — a reporter that does not exist |
+| `RP003` | inconsistent-reporter-style  | one reporter abbreviated two ways in one document      |
+| `DT001` | year-outside-reporter-range  | `999 F.3d 1 (1950)` — the series did not exist yet     |
+| `DT002` | implausible-year             | a decision dated in the future                         |
+| `CT001` | court-abbreviation           | `(Southern District of New York 1990)`                 |
+| `CT002` | reporter-court-mismatch      | `200 U.S. 1 (9th Cir. 1906)`                           |
+| `CT003` | court-did-not-exist          | a court cited before it was created                    |
+| `CT004` | ambiguous-court              | `App. Div.` — two states use it                        |
+| `ST001` | unresolved-short-form        | `Id.` or `supra` with nothing to point back to         |
+| `ST002` | pin-cite-out-of-range        | `410 U.S. 113, 99` — the pin precedes the first page   |
+| `AU001` | non-precedential-disposition | an unpublished order cited as authority                |
+| `AU002` | database-only-citation       | `2019 WL 4639462` with no reporter cite                |
+| `VF001` | unverified-authority         | a citation absent from your authority list             |
+| `VF002` | ambiguous-authority          | a citation matching several cases                      |
+| `VF003` | case-name-mismatch           | a real citation attached to the wrong case name        |
+| `VF004` | year-mismatch                | a year the record disagrees with                       |
 
-`VF` rules need `--verify`. The rest never touch the network. Full reference:
-[docs/rules.md](docs/rules.md).
+Full reference: [docs/rules.md](docs/rules.md).
+
+## Fixing
+
+`Fix` applies only **safe** corrections by default — the ones that change how a
+citation is spelled but not which authority it points to. Anything that changes
+the case, court or year is held back behind an explicit opt-in, because a
+confidently wrong citation is worse than a visibly broken one.
+
+Corrections are span-based and applied back-to-front, and two rules are never
+allowed to rewrite the same citation: the second is refused and reported rather
+than silently producing nonsense.
+
+## In Word
+
+Install the manifest above; a **Citations** group appears on the Home tab. The
+pane reads the open document, lists what it finds, and writes back the fixes
+you accept.
+
+Office.js exposes no character offsets, so each correction is re-expressed as
+"replace the Nth occurrence of this exact string" before anything is edited.
+See [docs/word-add-in.md](docs/word-add-in.md).
+
+## Verifying a build
+
+Every deployment publishes `checksums.sha256` and `integrity.json`, and the
+HTML carries SHA-384 Subresource Integrity on every local script, stylesheet
+and preloaded module — so a tampered asset fails to execute rather than failing
+to be noticed.
+
+```console
+$ curl -fsSLO https://wbarnha.github.io/ReCite/checksums.sha256
+$ sha256sum -c checksums.sha256
+```
+
+CI re-fetches the live site after each deploy and checks it against its own
+digests. See [docs/security.md](docs/security.md).
 
 ## Layout
 
-A uv workspace of five packages, each independently installable:
+A pnpm workspace. Each package is plain TypeScript with no runtime
+dependencies; React and Vite live only in the app.
 
 ```
 packages/
-├── recite-core/     model, eyecite extraction, reporters-db + courts-db lookups
-├── recite-rules/    the rule set — the only place that decides "wrong"
-├── recite-verify/   CourtListener client, chunking, SQLite cache
-├── recite-fix/      the check/fix engine
-└── recite-cli/      the `recite` command
+├── core/     model, regex parser, reporter + court tables, span patching
+├── rules/    the 17-rule set — the only place that decides "wrong"
+└── engine/   check/fix orchestration
+apps/
+└── web/      the web app and the Word task pane, from one build
+tools/
+├── manifest/  generates manifest.xml for wherever it is deployed
+├── integrity/ SHA-256 checksums, SRI injection, verification
+└── icons/     draws the add-in icons at build time
 ```
 
-The split is what keeps the rules honest: `recite-rules` cannot perform I/O,
-because it does not depend on anything that can. Verification results reach it
-as plain data defined in `recite-core`, so rules and the API client know
-nothing about each other.
-
-```
-document ─▶ extract ─▶ [verify] ─▶ rules ─▶ diagnostics ─▶ [apply fixes]
-            (core)     (verify)   (rules)                    (core.text)
-```
-
-See [docs/architecture.md](docs/architecture.md) for the reasoning, including
-the eyecite metadata bug ReCite works around.
+The dependency graph is the design: `rules` depends only on `core`, so a rule
+_cannot_ touch the network or the filesystem — nothing in its scope can.
+Verification results reach it as plain data, so the rule set and whatever
+supplies the authority list know nothing about each other.
 
 ## Develop
 
 ```console
-make sync        # create the workspace venv
-make check       # lint + types + tests, exactly what CI runs
-make test
-make demo        # run against the deliberately broken example brief
+$ pnpm install
+$ pnpm dev            # web app on :3000
+$ pnpm test           # 260 tests
+$ pnpm check          # lint + format + types + tests, what CI runs
+$ pnpm build:release  # build, generate manifest.xml, write checksums
 ```
 
-The test suite never reaches the network: the CourtListener client is exercised
-against a mocked transport, and anything that would make a real request is
-marked `network` and deselected.
+## Provenance
+
+Written from scratch for this repository. The reporter and court tables were
+compiled independently from public sources — the names of reporters and courts,
+their standard abbreviations and the years they existed are matters of fact
+about the published record. No code or data here is copied or derived from any
+other citation project.
+
+The parser fixtures are transcribed from a public court filing; see
+[docs/testing.md](docs/testing.md).
 
 ## Caveats
 
-- ReCite reads plain text. Convert PDFs and Word documents first (`pdftotext`,
-  or the Free Law Project's [doctor](https://github.com/freelawproject/doctor)).
-- Coverage is United States case law, because that is what `reporters-db` and
-  `courts-db` cover. Statutes, regulations and journals are found but not
-  checked.
-- A clean run is not a guarantee of correctness. ReCite proves specific things
-  are wrong; it cannot prove a citation is right.
+- ReCite reads plain text. Convert PDFs before pasting.
+- Coverage is United States case law. Statutes are recognised but not checked.
+- Reporter and court tables cover the federal system, the regional reporters
+  and the larger state series. They are not exhaustive, and `RP002` only speaks
+  up when an unknown reporter is a near-miss for a known one.
+- **A clean run is not a guarantee.** ReCite proves specific things are wrong.
+  It cannot prove a citation is right, and it is not legal advice.
 
 ## Licence
 
-BSD 2-Clause, matching the Free Law Project libraries it builds on. See
-[LICENSE](LICENSE).
-
-ReCite is not affiliated with or endorsed by the Free Law Project.
+BSD 2-Clause. See [LICENSE](LICENSE).

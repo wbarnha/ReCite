@@ -1,0 +1,314 @@
+/* A deliberately plain sheet: this runs inside Word's task pane as well as a
+   browser tab, and the pane is narrow, monochrome and not a place for
+   flourishes. Everything is sized in rem so Word's own zoom behaves. */
+
+:root {
+  --bg: #ffffff;
+  --fg: #17181c;
+  --muted: #63656d;
+  --line: #dfe1e6;
+  --surface: #f7f8fa;
+  --accent: #1a4f8a;
+  --error: #a4262c;
+  --warning: #8a6100;
+  --info: #1a4f8a;
+  --safe: #0f6b3f;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 15px;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #16171b;
+    --fg: #e8e9ec;
+    --muted: #9a9da6;
+    --line: #2e3037;
+    --surface: #1d1f24;
+    --accent: #79aee8;
+    --error: #f1707b;
+    --warning: #e0b341;
+    --info: #79aee8;
+    --safe: #57c68d;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  line-height: 1.5;
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--fg);
+  border-radius: 6px;
+  padding: 0.4rem 0.8rem;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+textarea {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.85rem;
+  line-height: 1.6;
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--fg);
+  resize: vertical;
+}
+
+a {
+  color: var(--accent);
+}
+
+/* ------------------------------------------------------------ layout ---- */
+
+.app {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 1.25rem;
+}
+
+.app.pane {
+  max-width: none;
+  padding: 0.75rem;
+}
+
+.masthead {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.masthead h1 {
+  font-size: 1.3rem;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.masthead .tagline {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1.25rem;
+}
+
+.app.pane .columns {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (max-width: 900px) {
+  .columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.toolbar {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+  margin: 0.75rem 0;
+}
+
+.toolbar .spacer {
+  flex: 1;
+}
+
+.checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+/* ----------------------------------------------------------- findings --- */
+
+.summary {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  font-size: 0.85rem;
+  margin-bottom: 0.75rem;
+}
+
+.pill {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.1rem 0.6rem;
+  background: var(--surface);
+}
+
+.pill.error {
+  color: var(--error);
+}
+.pill.warning {
+  color: var(--warning);
+}
+.pill.info {
+  color: var(--info);
+}
+
+.finding {
+  border: 1px solid var(--line);
+  border-left-width: 3px;
+  border-radius: 6px;
+  padding: 0.6rem 0.75rem;
+  margin-bottom: 0.6rem;
+  background: var(--surface);
+}
+
+.finding.error {
+  border-left-color: var(--error);
+}
+.finding.warning {
+  border-left-color: var(--warning);
+}
+.finding.info {
+  border-left-color: var(--info);
+}
+
+.finding header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin-bottom: 0.3rem;
+}
+
+.finding .rule {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-weight: 600;
+}
+
+.finding .severity {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.finding.error .severity {
+  color: var(--error);
+}
+.finding.warning .severity {
+  color: var(--warning);
+}
+.finding.info .severity {
+  color: var(--info);
+}
+
+.finding p {
+  margin: 0 0 0.35rem;
+  font-size: 0.9rem;
+}
+
+.finding .cite {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  color: var(--muted);
+  word-break: break-word;
+}
+
+.finding .fix {
+  font-size: 0.8rem;
+  color: var(--safe);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  word-break: break-word;
+}
+
+.finding .fix.unsafe {
+  color: var(--warning);
+}
+
+.finding .actions {
+  margin-top: 0.4rem;
+  display: flex;
+  gap: 0.4rem;
+}
+
+.finding .actions button {
+  padding: 0.15rem 0.5rem;
+  font-size: 0.75rem;
+}
+
+.empty {
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  padding: 1.25rem;
+  text-align: center;
+  color: var(--muted);
+}
+
+.empty strong {
+  color: var(--safe);
+}
+
+/* -------------------------------------------------------------- footer --- */
+
+.footer {
+  margin-top: 1.5rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line);
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.footer code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.notice {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-bottom: 0.75rem;
+}
+
+h2 {
+  font-size: 0.95rem;
+  margin: 0 0 0.5rem;
+}
+
+.status {
+  font-size: 0.8rem;
+  color: var(--muted);
+  min-height: 1.2em;
+}

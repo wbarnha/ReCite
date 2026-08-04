@@ -1,0 +1,27 @@
+{
+  "name": "@recite/engine",
+  "version": "1.0.0",
+  "description": "The engine that checks a document and rewrites its citations.",
+  "license": "BSD-2-Clause",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "rm -rf dist *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@recite/core": "workspace:*",
+    "@recite/rules": "workspace:*"
+  },
+  "sideEffects": false
+}

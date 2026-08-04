@@ -1,0 +1,412 @@
+/**
+ * Court reference data.
+ *
+ * Compiled independently for this project from public sources: the names of
+ * United States courts, their standard Bluebook abbreviations, and the years
+ * they have existed. Nothing here is derived from another project's data
+ * files.
+ *
+ * `abbrev` is the form a citation uses. `aliases` are other spellings seen in
+ * the wild — spelled-out names, older forms — which is what lets ReCite
+ * normalise `(Southern District of New York 1990)` to `(S.D.N.Y. 1990)`.
+ */
+
+export type CourtLevel = "supreme" | "appellate" | "trial";
+
+export interface Court {
+  readonly id: string;
+  readonly name: string;
+  /** Bluebook abbreviation used inside a citation parenthetical. */
+  readonly abbrev: string;
+  readonly level: CourtLevel;
+  readonly federal: boolean;
+  readonly start: number;
+  readonly end: number | null;
+  readonly aliases?: readonly string[];
+  /** True for bankruptcy courts, which share a district's name. */
+  readonly bankruptcy?: boolean;
+}
+
+export const COURTS: readonly Court[] = [
+  {
+    id: "scotus",
+    name: "Supreme Court of the United States",
+    abbrev: "U.S.",
+    level: "supreme",
+    federal: true,
+    start: 1789,
+    end: null,
+    aliases: ["Supreme Court of the United States", "SCOTUS", "U.S. Sup. Ct."],
+  },
+
+  // -- Courts of appeals --------------------------------------------------
+  {
+    id: "ca1",
+    name: "United States Court of Appeals for the First Circuit",
+    abbrev: "1st Cir.",
+    level: "appellate",
+    federal: true,
+    start: 1891,
+    end: null,
+    aliases: ["First Circuit", "C.A.1"],
+  },
+  {
+    id: "ca2",
+    name: "United States Court of Appeals for the Second Circuit",
+    abbrev: "2d Cir.",
+    level: "appellate",
+    federal: true,
+    start: 1891,
+    end: null,
+    aliases: ["Second Circuit", "2nd Cir.", "C.A.2"],
+  },
+  {
+    id: "ca3",
+    name: "United States Court of Appeals for the Third Circuit",
+    abbrev: "3d Cir.",
+    level: "appellate",
+    federal: true,
+    start: 1891,
+    end: null,
+    aliases: ["Third Circuit", "3rd Cir.", "C.A.3"],
+  },
+  {
+    id: "ca4",
+    name: "United States Court of Appeals for the Fourth Circuit",
+    abbrev: "4th Cir.",
+    level: "appellate",
+    federal: true,
+    start: 1891,
+    end: null,
+    aliases: ["Fourth Circuit", "C.A.4"],
+  },
+  {
+    id: "ca5",
+    name: "United States Court of Appeals for the Fifth Circuit",
+    abbrev: "5th Cir.",
+    level: "appellate",
+    federal: true,
+    start: 1891,
+    end: null,
+    aliases: ["Fifth Circuit", "C.A.5"],
+  },
+  {
+    id: "ca6",
+    name: "United States Court of Appeals for the Sixth Circuit",
+    abbrev: "6th Cir.",
+    level: "appellate",
+    federal: true,
+    start: 1891,
+    end: null,
+    aliases: ["Sixth Circuit", "C.A.6"],
+  },
+  {
+    id: "ca7",
+    name: "United States Court of Appeals for the Seventh Circuit",
+    abbrev: "7th Cir.",
+    level: "appellate",
+    federal: true,
+    start: 1891,
+    end: null,
+    aliases: ["Seventh Circuit", "C.A.7"],
+  },
+  {
+    id: "ca8",
+    name: "United States Court of Appeals for the Eighth Circuit",
+    abbrev: "8th Cir.",
+    level: "appellate",
+    federal: true,
+    start: 1891,
+    end: null,
+    aliases: ["Eighth Circuit", "C.A.8"],
+  },
+  {
+    id: "ca9",
+    name: "United States Court of Appeals for the Ninth Circuit",
+    abbrev: "9th Cir.",
+    level: "appellate",
+    federal: true,
+    start: 1891,
+    end: null,
+    aliases: ["Ninth Circuit", "C.A.9"],
+  },
+  {
+    id: "ca10",
+    name: "United States Court of Appeals for the Tenth Circuit",
+    abbrev: "10th Cir.",
+    level: "appellate",
+    federal: true,
+    start: 1929,
+    end: null,
+    aliases: ["Tenth Circuit", "C.A.10"],
+  },
+  {
+    id: "ca11",
+    name: "United States Court of Appeals for the Eleventh Circuit",
+    abbrev: "11th Cir.",
+    level: "appellate",
+    federal: true,
+    start: 1981,
+    end: null,
+    aliases: ["Eleventh Circuit", "C.A.11"],
+  },
+  {
+    id: "cadc",
+    name: "United States Court of Appeals for the District of Columbia Circuit",
+    abbrev: "D.C. Cir.",
+    level: "appellate",
+    federal: true,
+    start: 1893,
+    end: null,
+    aliases: ["D.C. Circuit"],
+  },
+  {
+    id: "cafc",
+    name: "United States Court of Appeals for the Federal Circuit",
+    abbrev: "Fed. Cir.",
+    level: "appellate",
+    federal: true,
+    start: 1982,
+    end: null,
+    aliases: ["Federal Circuit"],
+  },
+
+  // -- Selected district courts -------------------------------------------
+  {
+    id: "dcd",
+    name: "United States District Court for the District of Columbia",
+    abbrev: "D.D.C.",
+    level: "trial",
+    federal: true,
+    start: 1801,
+    end: null,
+    aliases: ["District of Columbia"],
+  },
+  {
+    id: "nysd",
+    name: "United States District Court for the Southern District of New York",
+    abbrev: "S.D.N.Y.",
+    level: "trial",
+    federal: true,
+    start: 1789,
+    end: null,
+    aliases: ["Southern District of New York", "S.D. New York", "S.D.N.Y"],
+  },
+  {
+    id: "nyed",
+    name: "United States District Court for the Eastern District of New York",
+    abbrev: "E.D.N.Y.",
+    level: "trial",
+    federal: true,
+    start: 1865,
+    end: null,
+    aliases: ["Eastern District of New York"],
+  },
+  {
+    id: "nysb",
+    name: "United States Bankruptcy Court for the Southern District of New York",
+    abbrev: "Bankr. S.D.N.Y.",
+    level: "trial",
+    federal: true,
+    start: 1979,
+    end: null,
+    bankruptcy: true,
+  },
+  {
+    id: "cand",
+    name: "United States District Court for the Northern District of California",
+    abbrev: "N.D. Cal.",
+    level: "trial",
+    federal: true,
+    start: 1886,
+    end: null,
+    aliases: ["Northern District of California"],
+  },
+  {
+    id: "cacd",
+    name: "United States District Court for the Central District of California",
+    abbrev: "C.D. Cal.",
+    level: "trial",
+    federal: true,
+    start: 1966,
+    end: null,
+    aliases: ["Central District of California"],
+  },
+  {
+    id: "ilnd",
+    name: "United States District Court for the Northern District of Illinois",
+    abbrev: "N.D. Ill.",
+    level: "trial",
+    federal: true,
+    start: 1855,
+    end: null,
+    aliases: ["Northern District of Illinois"],
+  },
+  {
+    id: "txsd",
+    name: "United States District Court for the Southern District of Texas",
+    abbrev: "S.D. Tex.",
+    level: "trial",
+    federal: true,
+    start: 1902,
+    end: null,
+    aliases: ["Southern District of Texas"],
+  },
+  {
+    id: "njd",
+    name: "United States District Court for the District of New Jersey",
+    abbrev: "D.N.J.",
+    level: "trial",
+    federal: true,
+    start: 1789,
+    end: null,
+    aliases: ["District of New Jersey"],
+  },
+  {
+    id: "gand",
+    name: "United States District Court for the Northern District of Georgia",
+    abbrev: "N.D. Ga.",
+    level: "trial",
+    federal: true,
+    start: 1848,
+    end: null,
+    aliases: ["Northern District of Georgia"],
+  },
+
+  // -- Selected state courts ----------------------------------------------
+  {
+    id: "ny",
+    name: "New York Court of Appeals",
+    abbrev: "N.Y.",
+    level: "supreme",
+    federal: false,
+    start: 1847,
+    end: null,
+    aliases: ["New York Court of Appeals"],
+  },
+  {
+    id: "nyappdiv",
+    name: "New York Supreme Court, Appellate Division",
+    abbrev: "App. Div.",
+    level: "appellate",
+    federal: false,
+    start: 1896,
+    end: null,
+    aliases: ["Appellate Division"],
+  },
+  {
+    id: "njsuperapp",
+    name: "New Jersey Superior Court, Appellate Division",
+    abbrev: "N.J. Super. Ct. App. Div.",
+    level: "appellate",
+    federal: false,
+    start: 1948,
+    end: null,
+    // Shared with New York's Appellate Division on purpose: the bare form is
+    // genuinely ambiguous and `resolveCourt` must decline to guess.
+    aliases: ["App. Div."],
+  },
+  {
+    id: "illapp",
+    name: "Illinois Appellate Court",
+    abbrev: "Ill. App. Ct.",
+    level: "appellate",
+    federal: false,
+    start: 1877,
+    end: null,
+    aliases: ["Illinois Appellate Court", "Ill. App."],
+  },
+  {
+    id: "ill",
+    name: "Supreme Court of Illinois",
+    abbrev: "Ill.",
+    level: "supreme",
+    federal: false,
+    start: 1818,
+    end: null,
+  },
+  {
+    id: "texapp",
+    name: "Texas Court of Appeals",
+    abbrev: "Tex. App.",
+    level: "appellate",
+    federal: false,
+    start: 1981,
+    end: null,
+    aliases: ["Texas Court of Appeals"],
+  },
+  {
+    id: "tex",
+    name: "Supreme Court of Texas",
+    abbrev: "Tex.",
+    level: "supreme",
+    federal: false,
+    start: 1846,
+    end: null,
+    aliases: ["Supreme Court of Texas"],
+  },
+  {
+    id: "gactapp",
+    name: "Court of Appeals of Georgia",
+    abbrev: "Ga. Ct. App.",
+    level: "appellate",
+    federal: false,
+    start: 1907,
+    end: null,
+    aliases: ["Georgia Court of Appeals", "Ga. App."],
+  },
+  {
+    id: "ga",
+    name: "Supreme Court of Georgia",
+    abbrev: "Ga.",
+    level: "supreme",
+    federal: false,
+    start: 1845,
+    end: null,
+  },
+  {
+    id: "calctapp",
+    name: "California Court of Appeal",
+    abbrev: "Cal. Ct. App.",
+    level: "appellate",
+    federal: false,
+    start: 1905,
+    end: null,
+    aliases: ["California Court of Appeal", "Cal. App."],
+  },
+  {
+    id: "cal",
+    name: "Supreme Court of California",
+    abbrev: "Cal.",
+    level: "supreme",
+    federal: false,
+    start: 1850,
+    end: null,
+  },
+];
+
+/**
+ * Parenthetical contents that are not courts.
+ *
+ * A citation parenthetical carries more than the court — `(en banc)`,
+ * `(per curiam)`, `(plurality opinion)`. Court resolution must leave these
+ * alone rather than guessing at the nearest-looking court.
+ */
+export const NON_COURT_PARENTHETICALS: ReadonlySet<string> = new Set([
+  "en banc",
+  "per curiam",
+  "plurality opinion",
+  "plurality",
+  "concurring",
+  "dissenting",
+  "mem.",
+  "summary order",
+  "unpublished",
+  "table",
+  "emphasis added",
+  "citation omitted",
+  "citations omitted",
+  "internal quotation marks omitted",
+  "quoting",
+  "cleaned up",
+]);

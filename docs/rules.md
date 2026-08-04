@@ -1,92 +1,100 @@
 # Rule reference
 
-Run `recite rules` for this list at the version you have installed, or
-`recite rules DT001` to explain one.
+Severity is advice about attention, not a verdict: **error** means the citation
+is demonstrably wrong or cannot be relied on as written, **warning** means it is
+probably wrong or needs a decision, and **info** is style.
 
-Severity drives the exit code: **only `error` makes `recite check` exit 1.**
-Warnings and notes are reported and do not fail a build.
+Fixes are **safe** (applied by default) or **unsafe** (need an explicit
+opt-in). Safe means the authority being cited does not change — only how it is
+spelled. Anything that changes which case, court or year is referenced is
+unsafe, because a confidently wrong citation is worse than a visibly broken one.
 
-Fixes are marked **safe** (applied by `recite fix`) or **unsafe** (held back
-behind `--unsafe`). Safe means the authority being cited does not change — only
-how it is spelled.
+Every example below is drawn from the sample document, which is transcribed
+from a real filing. See [testing.md](testing.md) for its provenance.
 
 ---
 
 ## RP — reporter abbreviation
 
-### `RP001` reporter-format · note / warning · safe fix
+### `RP001` reporter-format · info / warning · safe fix
 
-The reporter is not written in its standard form.
+The reporter is not in its standard form.
 
-Reported as a **note** when the difference is only spacing or punctuation
-(`123 F. 3d 456`, `550 US 544`, `410 U. S. 113`), and as a **warning** when a
-genuinely different abbreviation was used (`12 Fed. Rep. 34` for `12 F. 34`).
+An **info** when only the spacing differs (`119 S.Ct. 662` → `119 S. Ct. 662`,
+`20 L.Ed.2d 835` → `20 L. Ed. 2d 835`), a **warning** when a substantively
+different abbreviation was used (`12 Fed. Rep. 34` → `12 F. 34`). The fix
+changes spelling only, so it is always safe.
 
-The fix is eyecite's own canonicalisation, so it is always safe.
+### `RP002` unknown-reporter · error · unsafe fix
 
-### `RP002` ambiguous-reporter · warning · fix when the year settles it
+Citation-shaped text naming a reporter in no table — `12 Cal. Rprt. 3d 45`,
+where `Cal. Rptr. 3d` was meant.
 
-The abbreviation belongs to more than one reporter series. If a year is present
-and only one candidate series was being published then, that series is
-suggested as an unsafe fix; otherwise the rule reports and stops.
+This rule exists because the parser only matches reporters it knows, so a
+mistyped one produces _no citation at all_: without RP002 the error is
+invisible rather than reported. It fires only when the token is both unknown
+and a near-miss for a real abbreviation, which keeps numbers in ordinary prose
+from being read as citations. A reporter the tables know but the parser skipped
+— usually a citation wrapped across two lines by a PDF extractor — is left
+alone.
 
-### `RP003` unrecognized-reporter · error · unsafe fix
+### `RP003` inconsistent-reporter-style · warning · no fix
 
-Text shaped like a citation whose reporter is in no reporter database —
-`12 Cal. Rprt. 3d 45`, where `Cal. Rptr. 3d` was meant.
+One reporter abbreviated two ways in the same document.
 
-This rule exists because eyecite returns *nothing* for an unknown reporter, so
-without it a mistyped reporter is invisible: the citation simply vanishes from
-the report instead of being flagged.
-
-To keep false positives down it only fires when the reporter token is unknown
-to reporters-db *and* close to a real abbreviation. A reporter that exists but
-which eyecite did not claim — usually a citation wrapped across two lines by a
-PDF extractor — is deliberately left alone.
+Not a defect in any single citation, which is why the per-citation rules miss
+it. But a brief that says both `119 S.Ct. 662` and `119 S. Ct. 662` was
+assembled from more than one source, and that is worth knowing before anything
+else in it is trusted. Reported once per reporter, not once per citation.
 
 ---
 
 ## DT — dates
 
-### `DT001` year-outside-edition · error · unsafe fix
+### `DT001` year-outside-reporter-range · error · unsafe fix
 
 The decision year falls outside the years that reporter was published.
-`999 F.3d 1 (2d Cir. 1950)` cannot be right: F.3d began in 1993.
+`999 F.3d 1 (2d Cir. 1950)` cannot be right: the Federal Reporter's third
+series began in 1993.
 
-The most useful offline check in the set, because a reporter series and a date
-are enough to prove a citation impossible without looking anything up. When
-exactly one edition of the same series covers the cited year, that edition is
-offered as a fix.
+The strongest check available offline — a reporter series and a date are
+together enough to prove a citation impossible, with no database and no
+network. When exactly one edition of the same series covers the cited year,
+that edition is offered as a fix.
 
 ### `DT002` implausible-year · error / warning · no fix
 
-A year in the future (error), or before 1600 (warning). No fix is offered
-because there is no way to know what was meant.
+A year in the future (error) or before 1600 (warning). No fix, because there is
+no way to know what was meant.
 
 ---
 
 ## CT — court
 
-### `CT001` court-abbreviation · note · unsafe fix
+### `CT001` court-abbreviation · info · unsafe fix
 
-The court is named in some form other than its Bluebook abbreviation —
-`(Southern District of New York 1990)` rather than `(S.D.N.Y. 1990)`.
+The court is named in some form other than its standard abbreviation:
+`(Southern District of New York 1990)` → `(S.D.N.Y. 1990)`.
 
-Only fires when courts-db resolves the text unambiguously. Parentheticals like
-`(en banc)` and `(per curiam)` resolve to nothing and are left alone, and
-Supreme Court parentheticals are skipped because courts-db spells that court
-`SCOTUS`, which is not how a citation reads.
+Fires only when the written form resolves to exactly one court.
 
 ### `CT002` reporter-court-mismatch · error · no fix
 
-The parenthetical names a court that cannot appear in that reporter.
+The parenthetical names a court that cannot appear in that reporter:
 `200 U.S. 1 (9th Cir. 1906)` — the U.S. Reports carry only the Supreme Court.
-Usually means two citations were spliced together.
+Usually means two citations were spliced together, which is a common shape for
+a fabricated one.
 
 ### `CT003` court-did-not-exist · warning · no fix
 
-The court was not sitting in the year cited — created later, or abolished
-earlier.
+The court was not sitting in the year cited. The Eleventh Circuit, for
+instance, was created in 1981.
+
+### `CT004` ambiguous-court · info · no fix
+
+The abbreviation names more than one court. `App. Div.` is both New York's and
+New Jersey's intermediate appellate court; a reader cannot tell which was
+meant, and neither can ReCite, so it says so instead of picking one.
 
 ---
 
@@ -94,65 +102,72 @@ earlier.
 
 ### `ST001` unresolved-short-form · error · no fix
 
-An `Id.`, `supra`, or short-form citation with no full citation before it to
-attach to. The easiest thing to break while editing: move a paragraph and the
-`Id.` that opened it now points at nothing.
+An `Id.`, `supra` or short-form citation with no full citation before it. The
+easiest thing to break while editing: move a paragraph and the `Id.` that
+opened it now points at nothing.
 
 ### `ST002` pin-cite-out-of-range · warning · no fix
 
-The pin cite precedes the page the opinion starts on — `410 U.S. 113, 99`.
-Only the lower bound is checkable offline, since where an opinion *ends* is not
-in any local database, but transposed digits usually trip this.
-
-For short forms the first page is taken from the full citation they resolve to.
+The pin cite precedes the page the opinion starts on — `410 U.S. 113, 99`. Only
+the lower bound is checkable offline, since where an opinion _ends_ is not in
+any local table, but transposed digits usually trip this. Short forms are
+checked against the full citation they resolve to.
 
 ---
 
-## VF — CourtListener verification
+## AU — weight of authority
 
-These need `recite check --verify` and a `COURTLISTENER_API_TOKEN`. Without
-them the rules are inert, not failing.
+These do not say a citation is malformed. They say it may not carry the
+authority the sentence around it claims — a different, and often more
+consequential, kind of mistake.
 
-### `VF001` unknown-authority · error · no fix
+### `AU001` non-precedential-disposition · error / warning · no fix
 
-The citation is well-formed but matches nothing in CourtListener. **This is the
-hallucination check**: an invented citation is typically impeccable in form and
-simply does not exist.
+The disposition is not precedent.
 
-Note that CourtListener's coverage, while very broad, is not total — a `VF001`
-means "verify this by hand", not "this is definitely fabricated".
+Illinois marks Rule 23 orders with a `-U` suffix on the public-domain citation
+(`2013 IL App (1st) 111279-U`); those may not be cited as authority at all, so
+this is an **error**. The Federal Appendix collects unpublished federal
+dispositions, which are citable but not binding — a **warning**.
+
+### `AU002` database-only-citation · warning · no fix
+
+A case cited only by a commercial database number: `2019 WL 4639462`. It
+carries no court, no volume and no page, so a reader without that subscription
+cannot find it and cannot tell whether it was ever published. Silent when a
+parallel reporter citation appears alongside it.
+
+---
+
+## VF — verification against a corpus
+
+These need an authority corpus. Without one they are inert, not failing.
+
+**Read these findings carefully.** A corpus is only as complete as whoever
+assembled it. Absence from one is a reason to check a citation by hand — never
+proof that a case does not exist, and the messages are worded accordingly.
+
+### `VF001` unverified-authority · warning · no fix
+
+The citation is well-formed but absent from the corpus. This is the check that
+can catch a fabricated citation, which is typically impeccable in form. Nothing
+else in the rule set can see it.
 
 ### `VF002` ambiguous-authority · warning · no fix
 
-The citation matches several cases. Usually a missing parallel citation, court
-or year.
+The citation matches several authorities and picks out none of them.
 
 ### `VF003` case-name-mismatch · error · no fix
 
-The reporter citation is real, but belongs to a different case than the one
-named — a plausible case name bolted onto a real volume and page.
-
-Comparison is by significant-word overlap, not string equality, so
-`Bell Atl. Corp. v. Twombly` and `Bell Atlantic Corporation v. Twombly` are
-recognised as the same case. Corporate suffixes and `v.` are ignored.
+The citation is real but belongs to a different case than the one named — a
+plausible case name bolted onto a real volume and page. Compared by
+significant-word overlap, not string equality, so `Bell Atl. Corp. v. Twombly`
+and `Bell Atlantic Corporation v. Twombly` are recognised as the same case.
 
 ### `VF004` year-mismatch · warning · no fix
 
-The case exists but CourtListener dates it to a different year.
+The authority exists but the corpus dates it to a different year.
 
 Deliberately offers no fix even though the right year is known: a year that
-disagrees with the database is usually a symptom of a larger error, and
-rewriting it would make the citation look verified while leaving that error in
-place.
-
----
-
-## Selecting rules
-
-```console
-recite check brief.txt --select RP001 --select DT001   # only these
-recite check brief.txt --ignore CT001                  # everything but this
-```
-
-Both accept ids (`RP001`) and names (`reporter-format`). An unknown identifier
-is an error rather than a silent no-op.
+disagrees with the record is usually a symptom of a larger error, and rewriting
+it would make the citation look verified while leaving that error in place.

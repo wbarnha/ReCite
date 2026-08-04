@@ -1,0 +1,5 @@
+{
+  "$comment": "Single source of truth for the release version. `product` is the four-part form Office add-in manifests require and is what the UI displays; `semver` is the three-part form npm accepts. tools/manifest and tools/integrity both read this file — do not edit versions in package.json or manifest.xml by hand.",
+  "product": "1.0.0.0",
+  "semver": "1.0.0"
+}

@@ -1,0 +1,26 @@
+{
+  "name": "@recite/rules",
+  "version": "1.0.0",
+  "description": "The rule set that decides when a case law citation is wrong.",
+  "license": "BSD-2-Clause",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "rm -rf dist *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@recite/core": "workspace:*"
+  },
+  "sideEffects": false
+}

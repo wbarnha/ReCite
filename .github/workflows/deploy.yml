@@ -1,0 +1,112 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+# Pages needs these; nothing here writes to the repository.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never let two deploys race, but let an in-flight one finish so a published
+# site is always a complete build.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: build site
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: actions/configure-pages@v5
+        id: pages
+
+      - run: pnpm install --frozen-lockfile
+
+      # `base_url` comes from the Pages configuration, so a fork deploys to its
+      # own URL without anyone editing the manifest. Office will not load an
+      # add-in whose manifest points somewhere else.
+      - name: Build
+        env:
+          RECITE_BASE: ${{ steps.pages.outputs.base_path }}/
+          RECITE_BASE_URL: ${{ steps.pages.outputs.base_url }}/
+        run: pnpm build:release
+
+      - name: Verify checksums before publishing
+        run: pnpm verify:checksums
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: apps/web/dist
+
+  deploy:
+    name: publish
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
+
+  verify-published:
+    name: verify the published site
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      # Checking the deployed bytes, not the build directory, is the point:
+      # it confirms what Pages actually serves matches what CI produced.
+      - name: Re-verify the live site against its own checksums
+        env:
+          SITE: ${{ needs.deploy.outputs.page_url || format('https://{0}.github.io/{1}/', github.repository_owner, github.event.repository.name) }}
+        run: |
+          set -euo pipefail
+          base="${SITE%/}"
+          work=$(mktemp -d)
+
+          echo "Fetching $base/checksums.sha256"
+          curl -fsSL "$base/checksums.sha256" -o "$work/checksums.sha256"
+
+          failed=0
+          while read -r digest path; do
+            [ -z "$path" ] && continue
+            mkdir -p "$work/$(dirname "$path")"
+            if ! curl -fsSL "$base/$path" -o "$work/$path"; then
+              echo "::error::could not fetch $path"
+              failed=1
+              continue
+            fi
+            actual=$(sha256sum "$work/$path" | cut -d' ' -f1)
+            if [ "$actual" != "$digest" ]; then
+              echo "::error::$path: served bytes do not match the published digest"
+              failed=1
+            fi
+          done < "$work/checksums.sha256"
+
+          if [ "$failed" -ne 0 ]; then exit 1; fi
+          echo "Published site matches its checksums."
+
+      - name: The add-in manifest is reachable
+        env:
+          SITE: ${{ needs.deploy.outputs.page_url || format('https://{0}.github.io/{1}/', github.repository_owner, github.event.repository.name) }}
+        run: |
+          set -euo pipefail
+          base="${SITE%/}"
+          curl -fsSL "$base/manifest.xml" -o manifest.xml
+          python3 -c "
+          import xml.etree.ElementTree as ET
+          ET.parse('manifest.xml')
+          print('manifest.xml served and well-formed')
+          "
