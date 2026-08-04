@@ -108,23 +108,22 @@ export const pageRangeFormat: Rule = {
       if (!pin) continue;
 
       for (const range of pin.ranges) {
-        const written = String(range.to);
-        // `parsePinCite` expands `371-72` to 372, so only a range typed out in
-        // full still has the long form in its raw text.
-        if (!pin.raw.includes(`${range.from}`) || !pin.raw.includes(written)) continue;
-
+        // Compare against what the author actually typed. `range.to` is the
+        // expanded value and is identical for `371-72` and `371-372`, so it
+        // cannot answer this on its own.
         const abbreviated = abbreviateRange(range.from, range.to);
-        if (abbreviated === written) continue;
+        if (abbreviated === range.writtenTo) continue;
 
         found.push(
           diagnose(
             pageRangeFormat,
             citation,
-            `Page range ${range.from}-${range.to} should be written ${range.from}-${abbreviated} — rule 3.2(a) drops repetitious digits but keeps the last two.`,
+            `Page range ${range.from}-${range.writtenTo} should be written ${range.from}-${abbreviated} — rule 3.2(a) drops repetitious digits but keeps the last two.`,
             {
               context: {
                 from: range.from,
                 to: range.to,
+                written: `${range.from}-${range.writtenTo}`,
                 suggestion: `${range.from}-${abbreviated}`,
               },
             },

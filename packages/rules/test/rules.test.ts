@@ -527,3 +527,29 @@ describe("ST004 reversed-page-range", () => {
     ).toEqual([]);
   });
 });
+
+describe("ST003 against pin cites that could fool a heuristic", () => {
+  it("does not fire when a separate page equals the range's end", () => {
+    // `371-72` is correctly abbreviated. An earlier implementation decided by
+    // searching the raw pin cite for "372", which the standalone page here
+    // satisfies — telling the author their correct citation was wrong.
+    expect(
+      check("A v. B, 1 F.3d 300, 372, 371-72 (2d Cir. 1999).", pageRangeFormat),
+    ).toEqual([]);
+  });
+
+  it("does not fire when a separate page equals a four-digit range's end", () => {
+    expect(
+      check("A v. B, 1 F.3d 1200, 1208, 1204-08 (2d Cir. 1999).", pageRangeFormat),
+    ).toEqual([]);
+  });
+
+  it("still fires on the same shape when the range is written out in full", () => {
+    const found = check(
+      "A v. B, 1 F.3d 300, 372, 371-372 (2d Cir. 1999).",
+      pageRangeFormat,
+    );
+    expect(ids(found)).toEqual(["ST003"]);
+    expect(found[0]?.context?.suggestion).toBe("371-72");
+  });
+});

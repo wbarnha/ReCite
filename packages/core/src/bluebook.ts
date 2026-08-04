@@ -112,7 +112,17 @@ export const DASH_CLASS = `[${DASH_CHARACTERS.join("")}]`;
 
 export interface PageRange {
   readonly from: number;
+  /** The end page, expanded: 372 for both `371-72` and `371-372`. */
   readonly to: number;
+  /**
+   * The end page exactly as written — `"72"` or `"372"`.
+   *
+   * Kept because {@link to} cannot distinguish the two, and the rule 3.2(a)
+   * check is entirely about which of them the author typed. Inferring it by
+   * searching the raw text instead would misfire on a pin cite like
+   * `372, 371-72`, where the standalone page happens to equal the range's end.
+   */
+  readonly writtenTo: string;
 }
 
 /** A pin cite, broken into the pages it points at. */
@@ -159,7 +169,7 @@ export function parsePinCite(raw: string | undefined): PinCite | undefined {
     }
     // `371-72` means 371 to 372: the second number is an abbreviation of the
     // first with its leading digits dropped (rule 3.2(a)).
-    ranges.push({ from, to: expandTo(from, match[2]) });
+    ranges.push({ from, to: expandTo(from, match[2]), writtenTo: match[2] });
   }
 
   if (!passim && pages.length === 0 && ranges.length === 0) return undefined;

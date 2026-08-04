@@ -30,11 +30,13 @@ describe("dash handling", () => {
 
   it.each(NAMED)("parses a range written with a %s", (_name, dash) => {
     const pin = parsePinCite(`371${dash}72`);
-    expect(pin?.ranges).toEqual([{ from: 371, to: 372 }]);
+    expect(pin?.ranges).toMatchObject([{ from: 371, to: 372 }]);
   });
 
   it.each(NAMED)("tolerates spaces around a %s", (_name, dash) => {
-    expect(parsePinCite(`371 ${dash} 72`)?.ranges).toEqual([{ from: 371, to: 372 }]);
+    expect(parsePinCite(`371 ${dash} 72`)?.ranges).toMatchObject([
+      { from: 371, to: 372 },
+    ]);
   });
 
   it("covers every dash the module declares", () => {
@@ -48,7 +50,9 @@ describe("dash handling", () => {
       `Miller v. United Airlines, Inc., 174 F.3d 366, 371${dash}72 (2d Cir. 1999).`,
     ).citations;
     expect(citation?.pinCite).toBe(`371${dash}72`);
-    expect(parsePinCite(citation?.pinCite)?.ranges).toEqual([{ from: 371, to: 372 }]);
+    expect(parsePinCite(citation?.pinCite)?.ranges).toMatchObject([
+      { from: 371, to: 372 },
+    ]);
   });
 });
 
@@ -64,7 +68,7 @@ describe("parsePinCite", () => {
 
   it("reads a mix of pages and ranges", () => {
     const pin = parsePinCite("371-72, 380");
-    expect(pin?.ranges).toEqual([{ from: 371, to: 372 }]);
+    expect(pin?.ranges).toMatchObject([{ from: 371, to: 372 }]);
     expect(pin?.pages).toEqual([380]);
   });
 
@@ -207,7 +211,9 @@ describe("ranges in real citation shapes", () => {
   it("reads a range in an Id.", () => {
     const cites = parse("Iqbal, 556 U.S. 662 (2009). Id. at 678–80.").citations;
     expect(cites[1]?.pinCite).toBe("678–80");
-    expect(parsePinCite(cites[1]?.pinCite)?.ranges).toEqual([{ from: 678, to: 680 }]);
+    expect(parsePinCite(cites[1]?.pinCite)?.ranges).toMatchObject([
+      { from: 678, to: 680 },
+    ]);
   });
 
   it("reads a range in a short form", () => {
@@ -221,5 +227,29 @@ describe("ranges in real citation shapes", () => {
   it("reads discontinuous pages after a citation", () => {
     const [citation] = parse("Iqbal, 556 U.S. 662, 678, 680, 684 (2009).").citations;
     expect(parsePinCite(citation?.pinCite)?.pages).toEqual([678, 680, 684]);
+  });
+});
+
+describe("PageRange.writtenTo", () => {
+  it("records the end page as the author typed it", () => {
+    expect(parsePinCite("371-72")?.ranges[0]).toEqual({
+      from: 371,
+      to: 372,
+      writtenTo: "72",
+    });
+    expect(parsePinCite("371-372")?.ranges[0]).toEqual({
+      from: 371,
+      to: 372,
+      writtenTo: "372",
+    });
+  });
+
+  it("distinguishes the two forms that expand to the same page", () => {
+    // `to` is 372 for both, which is why the rule 3.2(a) check needs the
+    // written form and cannot infer it from the raw text.
+    const short = parsePinCite("371-72")?.ranges[0];
+    const long = parsePinCite("371-372")?.ranges[0];
+    expect(short?.to).toBe(long?.to);
+    expect(short?.writtenTo).not.toBe(long?.writtenTo);
   });
 });
