@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # The test suite must never reach the CourtListener API. Anything that would
+  # try is either mocked or marked `network` and deselected below.
+  RECITE_OFFLINE: "1"
+
+jobs:
+  static:
+    name: lint + types
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-packages
+      - run: uv run ruff check --output-format=github .
+      - run: uv run ruff format --check .
+      - run: uv run mypy packages
+
+  test:
+    name: pytest (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-packages --python ${{ matrix.python-version }}
+      - run: uv run pytest -m "not network" --cov=recite --cov-report=xml
+      - uses: actions/upload-artifact@v4
+        if: matrix.python-version == '3.12'
+        with:
+          name: coverage
+          path: coverage.xml
+
+  self-check:
+    name: recite check (dogfood)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-packages
+      # The example brief is deliberately full of broken citations, so a clean
+      # exit would mean the linter stopped working.
+      - name: Example brief must still report problems
+        run: |
+          if uv run recite check examples/brief.txt --format text; then
+            echo "::error::expected recite check to fail on examples/brief.txt"
+            exit 1
+          fi
+      - name: SARIF output is well-formed
+        run: |
+          uv run recite check examples/brief.txt --format sarif > recite.sarif || true
+          uv run python -c "import json,sys; json.load(open('recite.sarif'))"

@@ -1,0 +1,25 @@
+[project]
+name = "recite-fix"
+version = "0.1.0"
+description = "The engine that checks a document and rewrites its citations."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "../../LICENSE" }
+authors = [{ name = "The ReCite contributors" }]
+classifiers = [
+    "Intended Audience :: Legal Industry",
+    "License :: OSI Approved :: BSD License",
+    "Programming Language :: Python :: 3 :: Only",
+]
+dependencies = [
+    "recite-core",
+    "recite-rules",
+    "recite-verify",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/recite"]
