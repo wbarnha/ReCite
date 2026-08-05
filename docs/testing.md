@@ -115,6 +115,47 @@ Two limits, stated because the table looks more conclusive than it is.
   under 100ms from a local server, which makes the warmup look pointless; on a
   real connection those two downloads are most of the wait.
 
+### The AGPL spike, and what it measured
+
+`scribe.js-ocr` is **AGPL-3.0** and is compiled into the bundle published from
+GitHub Pages, which the repository's BSD-2-Clause claim does not cover.
+`pdfjs-dist` and `tesseract.js` are both **Apache-2.0**, so a second reader was
+built behind the same boundary — `apps/web/src/import/pdf-permissive.ts`,
+selected with `?engine=permissive` — and scored against the incumbent on one
+fixture with everything else held still.
+
+| engine                    | elapsed | similarity | citation recall |
+| ------------------------- | ------- | ---------- | --------------- |
+| `scribe` (AGPL-3.0)       | 4.9s    | 99.6%      | **100%**        |
+| `permissive` (Apache-2.0) | 2.8s    | 99.2%      | **80%**         |
+
+The permissive stack is roughly **twice as fast** and reads every case citation
+correctly. It loses the statute: `18 U.S.C. §§ 1544, 1546` comes back as
+`18 U.S.C. §8§ 1544, 1546` — a digit invented between the two section symbols,
+which destroys the citation.
+
+Two hypotheses were tested and neither held:
+
+- **Engine mode.** Scribe runs Tesseract's legacy and LSTM engines and
+  reconciles them. Initialising `tesseract.js` with OEM 2 (both engines) rather
+  than the LSTM-only default changed nothing.
+- **Render resolution.** Raising the page render from 300 to 450 DPI made it
+  _worse_: both symbols became `88`, giving `18 U.S.C. 88 1544`, which reads as
+  plausible text rather than as damage.
+
+The finding is narrower and more awkward than "it cannot read `§`". On a page
+holding that statute alone, the permissive stack reads `§§ 1544` **correctly**.
+It fails on the denser five-line page. So the section symbol is not reliably
+wrong — it is _unreliable_, which is worse for this use, because there is no
+way to tell from the output which documents it ruined.
+
+**The swap is therefore not taken.** `§` is not an optional glyph in a Bluebook
+citation checker. The spike is kept rather than deleted: it costs nothing at
+runtime (the two engines are separate lazy chunks, and only the selected one is
+downloaded), it is what a re-evaluation would start from, and `pnpm bench:ocr`
+re-runs the comparison on demand. The licence problem is unresolved and is now
+a labelling decision rather than an engineering one.
+
 ### What is not tunable
 
 Render resolution. Scribe hardcodes it — `js/extractPDFText.js:33` computes

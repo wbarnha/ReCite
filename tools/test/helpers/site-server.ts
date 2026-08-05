@@ -25,6 +25,11 @@ export const CHROMIUM = "/opt/pw-browsers/chromium-1194/chrome-linux/chrome";
 const MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
+  // pdf.js ships its worker as `.mjs`. Serving it as octet-stream makes
+  // Chromium refuse it under strict MIME checking for module scripts — which
+  // looks exactly like a broken engine and is a broken fixture. Pages serves
+  // it correctly; this has to as well or the test is not testing production.
+  ".mjs": "text/javascript; charset=utf-8",
   ".css": "text/css; charset=utf-8",
   ".wasm": "application/wasm",
   ".json": "application/json",

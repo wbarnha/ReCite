@@ -33,6 +33,7 @@ import {
   ocrSettingsKey,
   scribeOcrPages,
 } from "../src/import/ocr-options.js";
+import { DEFAULT_PDF_ENGINE } from "../src/import/engine.js";
 import type { ImportResult } from "../src/import/index.js";
 
 const result = (text: string): ImportResult => ({
@@ -85,18 +86,20 @@ describe("the session cache", () => {
     const b = new File(["identical"], "two-different-name.pdf");
     const c = new File(["different"], "one.pdf");
 
-    expect(await fileKey(a, DEFAULT_OCR_SETTINGS)).toBe(
-      await fileKey(b, DEFAULT_OCR_SETTINGS),
+    expect(await fileKey(a, DEFAULT_OCR_SETTINGS, DEFAULT_PDF_ENGINE)).toBe(
+      await fileKey(b, DEFAULT_OCR_SETTINGS, DEFAULT_PDF_ENGINE),
     );
-    expect(await fileKey(a, DEFAULT_OCR_SETTINGS)).not.toBe(
-      await fileKey(c, DEFAULT_OCR_SETTINGS),
+    expect(await fileKey(a, DEFAULT_OCR_SETTINGS, DEFAULT_PDF_ENGINE)).not.toBe(
+      await fileKey(c, DEFAULT_OCR_SETTINGS, DEFAULT_PDF_ENGINE),
     );
   });
 
   it("separates the same file read under different settings", async () => {
     const file = new File(["scan"], "brief.pdf");
-    expect(await fileKey(file, { mode: "auto", workers: null })).not.toBe(
-      await fileKey(file, { mode: "always", workers: null }),
+    expect(
+      await fileKey(file, { mode: "auto", workers: null }, DEFAULT_PDF_ENGINE),
+    ).not.toBe(
+      await fileKey(file, { mode: "always", workers: null }, DEFAULT_PDF_ENGINE),
     );
   });
 

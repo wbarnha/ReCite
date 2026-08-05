@@ -6,6 +6,8 @@ import { ACCEPTED_EXTENSIONS, importDocument } from "../import/index.js";
 import type { OcrSettings } from "../import/ocr-options.js";
 import { DEFAULT_OCR_SETTINGS } from "../import/ocr-options.js";
 import { warmForDrag, warmForPicker } from "../import/warmup.js";
+import type { PdfEngine } from "../import/engine.js";
+import { DEFAULT_PDF_ENGINE } from "../import/engine.js";
 
 /**
  * Open a document from disk.
@@ -20,10 +22,12 @@ import { warmForDrag, warmForPicker } from "../import/warmup.js";
 export function FileDrop({
   onImported,
   ocr = DEFAULT_OCR_SETTINGS,
+  engine = DEFAULT_PDF_ENGINE,
   disabled = false,
 }: {
   onImported: (result: ImportResult, name: string) => void;
   ocr?: OcrSettings;
+  engine?: PdfEngine;
   disabled?: boolean;
 }) {
   const inputId = useId();
@@ -40,7 +44,7 @@ export function FileDrop({
       setError("");
       setProgress(`Opening ${file.name}…`);
       try {
-        const result = await importDocument(file, setProgress, ocr);
+        const result = await importDocument(file, setProgress, ocr, engine);
         onImported(result, file.name);
         setProgress("");
       } catch (problem) {
@@ -50,7 +54,7 @@ export function FileDrop({
         setBusy(false);
       }
     },
-    [onImported, ocr],
+    [onImported, ocr, engine],
   );
 
   const openExample = useCallback(async () => {

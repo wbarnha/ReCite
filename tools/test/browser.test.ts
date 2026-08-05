@@ -58,13 +58,13 @@ describe.skipIf(!runnable)("the published site in a browser", () => {
     server?.close();
   });
 
-  async function open() {
+  async function open(query = "") {
     const page = await browser.newPage();
     requested = [];
     page.on("request", (request) => requested.push(request.url()));
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
-    await page.goto(`${origin}${BASE_PATH}`, { waitUntil: "networkidle" });
+    await page.goto(`${origin}${BASE_PATH}${query}`, { waitUntil: "networkidle" });
     return { page, errors };
   }
 
@@ -285,6 +285,35 @@ describe.skipIf(!runnable)("the published site in a browser", () => {
     expect(offOrigin()).toEqual([]);
     expect(requested.some((url) => url.includes("traineddata"))).toBe(true);
 
+    await page.close();
+  }, 300_000);
+
+  it("reads a scanned page with the permissive engine, asking nobody for help", async () => {
+    // The AGPL spike. `scribe.js-ocr` is AGPL-3.0 and is compiled into the
+    // published bundle; `pdfjs-dist` + `tesseract.js` are Apache-2.0. This
+    // asserts the candidate stack works end to end and stays on this origin —
+    // tesseract.js defaults to jsDelivr for its worker, its WebAssembly core
+    // *and* its language model, three separate ways to leak that someone is
+    // OCRing a document.
+    //
+    // It deliberately does not assert anything comparative. Whether the
+    // permissive stack is accurate *enough* is a measurement, not a boolean,
+    // and it lives in `pnpm bench:ocr` where the answer is a recall figure.
+    // See docs/testing.md for what that measurement currently says.
+    const pdf = await makeScannedPdf(browser, [
+      "Griggs v. State Farm Lloyds, 181 F.3d 694 (5th Cir. 1999).",
+    ]);
+
+    const { page } = await open("?engine=permissive");
+    await page.setInputFiles("input[type=file]", {
+      name: "scanned.pdf",
+      mimeType: "application/pdf",
+      buffer: pdf,
+    });
+    const text = await waitForMatch(page, "textarea", /Griggs/, 300_000);
+
+    expect(text).toContain("181 F.3d 694");
+    expect(offOrigin()).toEqual([]);
     await page.close();
   }, 300_000);
 });

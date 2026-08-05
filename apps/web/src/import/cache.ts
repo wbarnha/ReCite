@@ -19,6 +19,7 @@
  * document arriving under two names should hit.
  */
 
+import type { PdfEngine } from "./engine.js";
 import type { ImportResult } from "./index.js";
 import type { OcrSettings } from "./ocr-options.js";
 import { ocrSettingsKey } from "./ocr-options.js";
@@ -50,12 +51,19 @@ const entries = new Map<string, ImportResult>();
  * Word task pane, both of which are secure contexts. Hashing 100 MB is well
  * under a second and happens once per import.
  */
-export async function fileKey(file: File, settings: OcrSettings): Promise<string> {
+export async function fileKey(
+  file: File,
+  settings: OcrSettings,
+  engine: PdfEngine,
+): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
   const hex = [...new Uint8Array(digest)]
     .map((byte) => byte.toString(16).padStart(2, "0"))
     .join("");
-  return `${hex}:${ocrSettingsKey(settings)}`;
+  // The engine belongs in the key for the same reason the settings do: two
+  // engines reading one file are two answers, and handing back the wrong one
+  // would make the benchmark measure whichever ran first.
+  return `${hex}:${ocrSettingsKey(settings)}:engine=${engine}`;
 }
 
 export function cached(key: string): ImportResult | undefined {

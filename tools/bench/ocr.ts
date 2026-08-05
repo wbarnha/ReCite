@@ -60,6 +60,16 @@ const SCANNED_LINES = [
 const MODES = ["auto", "always", "never"] as const;
 
 /**
+ * The two PDF stacks, and the reason this harness matters.
+ *
+ * `scribe` is AGPL-3.0 and is what ships; `permissive` is pdfjs-dist plus
+ * tesseract.js, both Apache-2.0. The licence argument is settled by whether
+ * the second holds citation recall against the first — see
+ * `apps/web/src/import/engine.ts`.
+ */
+const ENGINES = ["scribe", "permissive"] as const;
+
+/**
  * Worker counts to sweep, under the default mode.
  *
  * `null` is Scribe's own choice — up to six in a browser. The reason to want
@@ -71,6 +81,8 @@ const WORKER_COUNTS: ReadonlyArray<number | null> = [null, 1, 2, 4];
 
 interface Run {
   readonly label: string;
+  /** Requests that left the origin. Must always be empty. */
+  readonly offOrigin: readonly string[];
   readonly ms: number;
   readonly chars: number;
   readonly similarity: number;
@@ -107,7 +119,15 @@ async function main(): Promise<void> {
     );
 
     const runs: Run[] = [];
+
+    // The comparison the licence question turns on: both engines, one fixture,
+    // one mode, everything else held still.
+    for (const engine of ENGINES) {
+      runs.push(await time(browser, origin, pdf, expected, { mode: "auto", engine }));
+    }
+
     for (const mode of MODES) {
+      if (mode === "auto") continue; // measured above, on both engines
       runs.push(await time(browser, origin, pdf, expected, { mode }));
     }
     // The same file again under the default mode: this is the cache path, and
@@ -136,14 +156,35 @@ async function time(
   options: {
     mode: (typeof MODES)[number];
     workers?: number;
+    engine?: (typeof ENGINES)[number];
     twice?: boolean;
   },
 ): Promise<Run> {
-  const { mode, workers, twice = false } = options;
+  const { mode, workers, engine, twice = false } = options;
   const page = await browser.newPage();
-  // The worker count is a query parameter rather than a control — see
-  // `import/ocr-options.ts` for why it is reachable but not on the toolbar.
-  const query = workers === undefined ? "" : `?workers=${workers}`;
+
+  // Every request, so a stack that quietly reaches for a CDN is caught here
+  // rather than in production. tesseract.js defaults to jsDelivr for three
+  // separate assets.
+  const offOrigin: string[] = [];
+  page.on("request", (request) => {
+    const url = request.url();
+    if (
+      !url.startsWith(origin) &&
+      !url.startsWith("data:") &&
+      !url.startsWith("blob:")
+    ) {
+      offOrigin.push(url);
+    }
+  });
+
+  // Both knobs are query parameters rather than controls — see
+  // `import/ocr-options.ts` and `import/engine.ts` for why they are reachable
+  // but not on the toolbar.
+  const parameters = new URLSearchParams();
+  if (workers !== undefined) parameters.set("workers", String(workers));
+  if (engine !== undefined) parameters.set("engine", engine);
+  const query = parameters.size > 0 ? `?${parameters.toString()}` : "";
   await page.goto(`${origin}${BASE_PATH}${query}`, { waitUntil: "networkidle" });
   await page.selectOption("select[aria-label^='When to read text']", mode);
 
@@ -182,12 +223,15 @@ async function time(
   const accuracy = citationAccuracy(expected, text);
   const label = twice
     ? `${mode} (second open)`
-    : workers === undefined
-      ? mode
-      : `${mode}, ${workers} worker${workers === 1 ? "" : "s"}`;
+    : engine !== undefined
+      ? `${engine} engine`
+      : workers === undefined
+        ? mode
+        : `${mode}, ${workers} worker${workers === 1 ? "" : "s"}`;
 
   return {
     label,
+    offOrigin: [...new Set(offOrigin)],
     ms,
     chars: text.length,
     similarity: similarity(expected, text),
@@ -219,6 +263,9 @@ function report(runs: readonly Run[]): void {
     if (run.phases) console.log(`  ${run.phases}`);
     if (run.lost.length > 0) {
       console.log(`  lost: ${run.lost.map((t) => JSON.stringify(t)).join(", ")}`);
+    }
+    if (run.offOrigin.length > 0) {
+      console.log(`  !! LEFT THE ORIGIN: ${run.offOrigin.join(", ")}`);
     }
   }
 
