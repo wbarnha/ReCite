@@ -49,7 +49,9 @@ function WebApp() {
 
       <div className="notice">
         Nothing you paste leaves this page. Parsing, the rule set and the authority
-        check all run locally. There is no server.
+        check all run locally. There is no server — your browser is configured to refuse
+        network connections from this app.{" "}
+        <a href="./privacy.html">How this is enforced</a>
       </div>
 
       <div className="columns">

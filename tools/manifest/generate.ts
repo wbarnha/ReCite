@@ -69,9 +69,11 @@ export function renderManifest({ baseUrl, version }: ManifestOptions): string {
   <DefaultLocale>en-US</DefaultLocale>
   <DisplayName DefaultValue="ReCite" />
   <Description DefaultValue="Check case law citations in the open document: impossible reporter and year pairings, non-precedential authority, inconsistent abbreviations, and citations missing from your authority list. Runs locally; document text is not uploaded." />
-  <IconUrl DefaultValue="${url("icons/icon-32.png")}" />
-  <HighResolutionIconUrl DefaultValue="${url("icons/icon-80.png")}" />
-  <SupportUrl DefaultValue="${url("")}" />
+  <!-- AppSource wants 64x64 here and 128x128 for the high-resolution icon;
+       the 16/32/80 set below is the ribbon, which is a different thing. -->
+  <IconUrl DefaultValue="${url("icons/icon-64.png")}" />
+  <HighResolutionIconUrl DefaultValue="${url("icons/icon-128.png")}" />
+  <SupportUrl DefaultValue="${url("support.html")}" />
 
   <AppDomains>
     <AppDomain>${origin}</AppDomain>

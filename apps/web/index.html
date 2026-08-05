@@ -15,9 +15,15 @@
       Word task pane is itself framed by Office, so the policy would need to
       permit that anyway. See docs/security.md.
     -->
+    <!--
+      `script-src 'self'` with no CDN: the web app does not load office.js, and
+      only the task pane does. Listing Microsoft's origin here anyway would
+      have permitted a request this page never makes, which is the difference
+      between a privacy claim that is true and one the browser enforces.
+    -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'none'; script-src 'self' https://appsforoffice.microsoft.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'none'; form-action 'none'; base-uri 'none'"
+      content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'none'; form-action 'none'; base-uri 'none'"
     />
     <title>ReCite — find and fix broken case law citations</title>
     <meta

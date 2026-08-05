@@ -12,11 +12,16 @@ export function Footer({ compact = false }: { compact?: boolean }) {
         built <code>{BUILD_INFO.builtAt}</code>
       </p>
       {!compact && (
-        <p>
-          Verify this build against <a href="./integrity.json">integrity.json</a> and{" "}
-          <a href="./checksums.sha256">checksums.sha256</a>. Everything runs in your
-          browser; no document text is uploaded.
-        </p>
+        <>
+          <p>
+            Verify this build against <a href="./integrity.json">integrity.json</a> and{" "}
+            <a href="./checksums.sha256">checksums.sha256</a>.
+          </p>
+          <p>
+            <a href="./privacy.html">Privacy</a> · <a href="./terms.html">Terms</a> ·{" "}
+            <a href="./support.html">Support</a>
+          </p>
+        </>
       )}
       <p>
         ReCite reports problems it can demonstrate. It is not legal advice, and a clean

@@ -4,12 +4,27 @@
 Microsoft Word. A linter for legal writing: it reads a brief, tells you which
 citations are wrong, and corrects the ones it can correct safely.
 
-Everything runs locally. There is no server, and no document text is uploaded.
+> ### Everything runs in your browser
+>
+> There is no ReCite server. No account, no upload, no database, no API. Your
+> document is read into memory in the page, checked, and gone when you close the
+> tab. It is never transmitted anywhere.
+>
+> This is not only a promise — the page ships a Content Security Policy with
+> `connect-src 'none'`, so **the browser itself refuses to open a network
+> connection** from the app. Open your network panel and check a document: there
+> are no requests.
+>
+> Working with privileged material? See
+> [**docs/compliance.md**](docs/compliance.md) — written for a law firm's
+> security review, and candid about SOC 2 (ReCite cannot hold a report, and
+> why that matters less than it sounds).
 
 |                      |                                                      |
 | -------------------- | ---------------------------------------------------- |
 | Web app              | <https://wbarnha.github.io/ReCite/>                  |
 | Word add-in manifest | <https://wbarnha.github.io/ReCite/manifest.xml>      |
+| Privacy              | <https://wbarnha.github.io/ReCite/privacy.html>      |
 | Version              | set by the release tag — see [Releasing](#releasing) |
 
 ## Why

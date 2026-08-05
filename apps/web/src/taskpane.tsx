@@ -29,6 +29,19 @@ function TaskPane() {
         <span className="tagline">Citation check for this document</span>
       </header>
 
+      {/*
+        Stated here, not only in the footer. This pane is the one that opens on
+        a real client document, so the person reading it is the person whose
+        confidentiality obligation is engaged.
+      */}
+      <div className="notice">
+        This document stays on your machine. Checking runs inside Word; nothing is
+        uploaded.{" "}
+        <a href="./privacy.html" target="_blank" rel="noreferrer">
+          Details
+        </a>
+      </div>
+
       <div className="toolbar">
         <button
           type="button"

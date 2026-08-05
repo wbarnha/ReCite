@@ -39,7 +39,7 @@ mismatch fails the build rather than waiting for someone to notice.
 $ pnpm build:release
 $ pnpm verify:checksums
 ReCite 1.0.0.0, commit 1a2b3c4d5e6f, built 2026-08-04T13:38:53.676Z
-OK: 15 files match their recorded SHA-256 digests.
+OK: 18 files match their recorded SHA-256 digests.
 ```
 
 `verify:checksums` also accepts a directory, so you can point it at a
@@ -128,6 +128,18 @@ a genuine ambiguity but left the timing unchanged, because the cost was one
 line further down. Measuring after the fix, not just before it, is what caught
 that.
 
+### Added: an input ceiling
+
+Every pattern being linear is not the same as being free. `parse()` now
+refuses a document over 8,000,000 characters — roughly 2,500 pages — instead
+of working through it on the UI thread.
+
+It refuses rather than truncates, and that is the point. A checker that
+silently read the first few megabytes would report a clean document, and
+nobody could tell that from a document that was actually clean. `InputTooLarge`
+is a named type so a caller can tell a document the user can split from a
+defect they cannot do anything about.
+
 ### Fixed: quadratic scan in RP002
 
 The unknown-reporter rule tested every regex match against every citation.
@@ -136,10 +148,18 @@ linearly. A brief with a few thousand citations is not unusual.
 
 ### Added: a Content Security Policy
 
-Both pages now carry a restrictive CSP. `connect-src 'none'` is the one that
+Both pages carry a restrictive CSP. `connect-src 'none'` is the one that
 matters: the app has no server, so nothing should ever open a connection, and
 a bug or a compromised dependency cannot quietly post a client's document
-somewhere. `script-src` allows only this origin and Microsoft's Office CDN.
+somewhere.
+
+`script-src` differs between the two pages, on purpose. The task pane allows
+this origin and Microsoft's Office CDN, because Office requires `office.js` be
+loaded from there. **The web app allows only `'self'`** — it never loads
+`office.js`, so permitting that origin would have allowed a request the page
+does not make. That is the difference between a privacy claim that happens to
+be true and one the browser enforces, and `tools/test/privacy-claims.test.ts`
+fails if either page drifts.
 
 `frame-ancestors` is _not_ set, and cannot usefully be: browsers ignore it when
 it arrives in a `<meta>` element, and GitHub Pages cannot set response headers.
@@ -200,9 +220,37 @@ a proof of linearity. The timing tests in
 `packages/core/test/robustness.test.ts` remain the thing that actually holds
 the line.
 
+Which is why `packages/core/test/redos.test.ts` now enumerates
+`buildPatterns()` rather than taking a list: every pattern is crossed with
+twelve adversarial input shapes, so a pattern added next year is covered the
+day it is written by someone who does not have to know this file exists. It
+asserts a growth ratio rather than a wall-clock budget — quadratic grows about
+sixteenfold when the input grows fourfold, and comparing a pattern against
+itself stays meaningful on a loaded runner. Planting a superlinear pattern
+confirms it is caught.
+
 `react/no-danger` and `@typescript-eslint/no-floating-promises` are enforced
 for the same reason: both describe a property this codebase already has, and
 the point of enforcing them is that losing it becomes visible.
+
+## Dependencies
+
+What reaches a browser: React and React DOM. That is the whole runtime
+dependency tree. The three published packages — `core`, `rules`, `engine` —
+have none at all, which is why a rule cannot reach the network: nothing in its
+scope can.
+
+CI audits at two thresholds on every commit. What ships is audited at `low`,
+because anything there is a vulnerability in the product. The toolchain is
+audited at `moderate`, because it runs on maintainer machines and on a runner
+holding a token — a compromise there is a supply-chain compromise of the
+release, even though none of it reaches a user. The lockfile is checked
+against the manifests so a hand-edited or stale one cannot install silently.
+
+The one asset not bundled is `office.js`, which Office requires be loaded from
+Microsoft's CDN and which therefore cannot carry Subresource Integrity. It
+loads only in the Word task pane. The web app's policy does not permit that
+origin at all, so the page cannot reach Microsoft even if something tried.
 
 ## Reporting a problem
 
