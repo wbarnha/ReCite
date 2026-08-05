@@ -214,6 +214,84 @@ describe.skipIf(!runnable)("the published site in a browser", () => {
     await page.close();
   }, 60_000);
 
+  it("shows the commit it was built from, linked to the source", async () => {
+    // On a site that deploys on every push, the version number alone does not
+    // identify a build. The commit does, and a link makes it usable.
+    const { page } = await open();
+    const line = await waitForMatch(page, ".build-line", /commit/, 20_000);
+    expect(line).toMatch(/[0-9a-f]{12}/);
+
+    const href = await page.locator(".footer a.commit").first().getAttribute("href");
+    expect(href).toMatch(/\/commit\/[0-9a-f]+$/);
+    await page.close();
+  }, 60_000);
+
+  it("publishes the example filing for download", async () => {
+    const { page } = await open();
+    const response = await page.request.get(
+      `${origin}${BASE_PATH}mata-v-avianca-filing.pdf`,
+    );
+    expect(response.status()).toBe(200);
+    // A real PDF, not a 404 page with the right name.
+    const body = await response.body();
+    expect(body.subarray(0, 5).toString("latin1")).toBe("%PDF-");
+    expect(body.length).toBeGreaterThan(100_000);
+    await page.close();
+  }, 60_000);
+
+  it("publishes the walkthrough", async () => {
+    const { page } = await open();
+    const response = await page.request.get(`${origin}${BASE_PATH}tutorial.html`);
+    expect(response.status()).toBe(200);
+    const html = await response.text();
+    // The lesson the page exists for.
+    expect(html).toMatch(/does not report that these cases do not exist/i);
+    expect(html).toContain("mata-v-avianca-filing.pdf");
+    await page.close();
+  }, 60_000);
+
+  /** What each saved file must start with, so a mislabelled one is caught. */
+  const SIGNATURES: ReadonlyArray<readonly [string, (bytes: Buffer) => void]> = [
+    ["docx", (bytes) => expect(bytes.subarray(0, 2).toString("latin1")).toBe("PK")],
+    ["pdf", (bytes) => expect(bytes.subarray(0, 5).toString("latin1")).toBe("%PDF-")],
+    ["rtf", (bytes) => expect(bytes.subarray(0, 5).toString("latin1")).toBe("{\\rtf")],
+    ["odt", (bytes) => expect(bytes.subarray(0, 2).toString("latin1")).toBe("PK")],
+    [
+      "report.json",
+      (bytes) => {
+        expect(JSON.parse(bytes.toString("utf8"))).toMatchObject({ tool: "ReCite" });
+      },
+    ],
+  ];
+
+  it.each(SIGNATURES.map(([format]) => format))(
+    "saves the document as %s",
+    async (format) => {
+      const check = SIGNATURES.find(([id]) => id === format)![1];
+      const { page } = await open();
+      await page.fill("textarea", "Iqbal, 556 U.S. 662, 678 (2009).");
+
+      await page.selectOption(".saveas select", format);
+      const [download] = await Promise.all([
+        page.waitForEvent("download", { timeout: 20_000 }),
+        page.click(".saveas button"),
+      ]);
+
+      const stream = await download.createReadStream();
+      const chunks: Buffer[] = [];
+      for await (const chunk of stream) chunks.push(chunk as Buffer);
+      const bytes = Buffer.concat(chunks);
+
+      expect(bytes.length).toBeGreaterThan(50);
+      check(bytes);
+
+      // Written in the page: saving involves no network at all.
+      expect(offOrigin()).toEqual([]);
+      await page.close();
+    },
+    60_000,
+  );
+
   it("reads a scanned PDF with OCR, and asks nobody for help", async () => {
     // The fixture is a photograph of text: no text layer, nothing selectable.
     // This is the case the whole feature exists for.

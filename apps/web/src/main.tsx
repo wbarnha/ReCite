@@ -6,11 +6,16 @@ import { createRoot } from "react-dom/client";
 import { FileDrop } from "./components/FileDrop.js";
 import { Findings } from "./components/Findings.js";
 import { Footer } from "./components/Footer.js";
+import { SaveAs } from "./components/SaveAs.js";
 import { ProfilePicker } from "./components/ProfilePicker.js";
+import { BUILD_INFO, SHORT_COMMIT } from "./build-info.js";
 import { BrowserHost } from "./host.js";
 import type { ImportResult } from "./import/index.js";
+import type { ReportContext } from "./export/index.js";
 import { SAMPLE_CORPUS, SAMPLE_TEXT } from "./sample.js";
 import "./styles.css";
+import { describeProfile } from "@recite/core";
+
 import { useReCite } from "./useReCite.js";
 
 function WebApp() {
@@ -44,7 +49,39 @@ function WebApp() {
 
   const loadSample = useCallback(() => {
     setDraft(SAMPLE_TEXT);
+    setImported(null);
   }, []);
+
+  // Everything a saved report needs to stand on its own: what was checked,
+  // against which edition, and which build said so.
+  const reportContext: ReportContext = useMemo(
+    () => ({
+      documentName: imported?.name ?? "document",
+      profile: describeProfile(recite.profile),
+      citationCount: recite.result?.extraction.citations.length ?? 0,
+      findings: (recite.result?.diagnostics ?? []).map((diagnostic) => ({
+        ruleId: diagnostic.ruleId,
+        // `context` values are `unknown`; anything that is not a string is
+        // not a rule name, and falling back to the id is more useful than
+        // "[object Object]".
+        ruleName:
+          typeof diagnostic.context?.["name"] === "string"
+            ? diagnostic.context["name"]
+            : diagnostic.ruleId,
+        severity: diagnostic.severity,
+        message: diagnostic.message,
+        citation: diagnostic.citationText,
+        start: diagnostic.span.start,
+        end: diagnostic.span.end,
+        ...(diagnostic.correction
+          ? { suggestion: diagnostic.correction.replacement }
+          : {}),
+      })),
+      version: BUILD_INFO.version,
+      commit: SHORT_COMMIT,
+    }),
+    [imported, recite.profile, recite.result],
+  );
 
   return (
     <div className="app">
@@ -126,6 +163,8 @@ function WebApp() {
           <div className="status" role="status">
             {recite.status}
           </div>
+
+          <SaveAs text={draft} context={reportContext} disabled={recite.busy} />
         </section>
 
         <section>

@@ -74,17 +74,37 @@ export async function readPdf(
 
   onProgress("Reading the PDF…");
 
-  let ocrPages = 0;
+  /**
+   * Whether recognition ran, and over how many pages if that is knowable.
+   *
+   * Both, because they are separate facts and only one is reliable. Scribe
+   * emits `{ type: "recognize" }` as a bare tick with no page number for this
+   * document — 20 of them for a ten-page filing — so counting them would
+   * report "20 pages" for a ten-page file. Where a page number *is* supplied
+   * it is collected, and the count is only shown when there is one.
+   *
+   * An earlier version watched for `type: "pageOCR"`, which Scribe never
+   * emits at all. The *Mata* filing came back labelled a plain PDF with no
+   * accuracy warning, despite obvious OCR damage in the text (`Affirma tion`,
+   * `Opposi T I on`). Dropping that warning silently is worse than showing no
+   * progress: it is the caveat a reader most needs.
+   */
+  let recognitionRan = false;
+  const recognisedPages = new Set<number>();
 
   scribe.opt.progressHandler = (message: unknown) => {
-    // Scribe reports per-page recognition progress; surfacing the count is
-    // more useful than the raw message and does not leak document content
-    // into the status line.
-    const info = message as { type?: string; n?: number } | undefined;
-    if (info?.type === "pageOCR") {
-      ocrPages++;
-      onProgress(`Reading text from images — page ${ocrPages}…`);
-    }
+    const event = message as { type?: string; n?: number } | undefined;
+    if (event?.type !== "recognize") return;
+
+    recognitionRan = true;
+    if (typeof event.n === "number") recognisedPages.add(event.n);
+
+    const pages = recognisedPages.size;
+    onProgress(
+      pages > 0
+        ? `Reading text from page images — ${pages} page${pages === 1 ? "" : "s"} so far…`
+        : "Reading text from page images…",
+    );
   };
 
   try {
@@ -94,13 +114,18 @@ export async function readPdf(
       ocrPages: "autoShallow",
     });
 
+    const ocrPages = recognisedPages.size;
     const warnings: string[] = [];
-    if (ocrPages > 0) {
+    if (recognitionRan) {
+      const scope =
+        ocrPages > 0
+          ? `${ocrPages} page${ocrPages === 1 ? "" : "s"} of this PDF had`
+          : "Part of this PDF had";
       warnings.push(
-        `${ocrPages} page${ocrPages === 1 ? "" : "s"} had no text layer and ${
-          ocrPages === 1 ? "was" : "were"
-        } read by OCR. OCR misreads characters — check any citation it reports ` +
-          "against the original before relying on it.",
+        `${scope} no usable text layer and was read by optical character ` +
+          "recognition. OCR misreads characters, and the ones it confuses — " +
+          "1 for l, 0 for O, 5 for S — are what citations are made of. Check " +
+          "anything reported here against the original before relying on it.",
       );
     }
     if (!text.trim()) {
@@ -112,9 +137,9 @@ export async function readPdf(
 
     const result: ImportResult = {
       text: normalise(text),
-      format: ocrPages > 0 ? "PDF (OCR)" : "PDF",
+      format: recognitionRan ? "PDF, partly read by OCR" : "PDF",
       warnings,
-      ...(ocrPages > 0 ? { ocr: { pages: ocrPages } } : {}),
+      ...(recognitionRan ? { ocr: { pages: ocrPages } } : {}),
     };
     return result;
   } finally {

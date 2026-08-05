@@ -24,7 +24,12 @@ export interface ImportResult {
   readonly format: string;
   /** Set when some of the text came from OCR rather than from a text layer. */
   readonly ocr?: {
-    /** How many pages had no text layer and had to be recognised. */
+    /**
+     * How many pages were recognised, when Scribe reports page numbers.
+     * Zero means recognition ran but did not say over how many pages — the
+     * fact that it ran is what matters, and a made-up count would be worse
+     * than none.
+     */
     readonly pages: number;
   };
   /** Anything the reader wants the user to know before trusting the text. */

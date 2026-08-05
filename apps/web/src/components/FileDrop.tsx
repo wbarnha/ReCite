@@ -1,5 +1,6 @@
 import { useCallback, useId, useRef, useState } from "react";
 
+import { EXAMPLE, loadExample } from "../example.js";
 import type { ImportResult } from "../import/index.js";
 import { ACCEPTED_EXTENSIONS, importDocument } from "../import/index.js";
 
@@ -46,6 +47,19 @@ export function FileDrop({
     },
     [onImported],
   );
+
+  const openExample = useCallback(async () => {
+    setBusy(true);
+    setError("");
+    setProgress(`Fetching the ${EXAMPLE.pages}-page example filing…`);
+    try {
+      await open(await loadExample());
+    } catch (problem) {
+      setError(problem instanceof Error ? problem.message : String(problem));
+      setBusy(false);
+      setProgress("");
+    }
+  }, [open]);
 
   const onDrop = useCallback(
     (event: React.DragEvent) => {
@@ -94,6 +108,25 @@ export function FileDrop({
             event.target.value = "";
           }}
         />
+      </div>
+
+      <div className="filedrop-example">
+        <button
+          type="button"
+          onClick={() => void openExample()}
+          disabled={disabled || busy}
+        >
+          Try the example filing
+        </button>
+        <span>
+          The affirmation from <em>Mata v. Avianca</em> — the brief with six citations
+          to cases that did not exist. {EXAMPLE.pages} pages, part scanned, so it takes
+          about {EXAMPLE.approximateSeconds} seconds.{" "}
+          <a href={`./${EXAMPLE.file}`} download>
+            Download the PDF
+          </a>{" "}
+          &middot; <a href="./tutorial.html">Walkthrough</a>
+        </span>
       </div>
 
       {progress && (

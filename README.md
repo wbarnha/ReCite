@@ -26,6 +26,7 @@ citations are wrong, and corrects the ones it can correct safely.
 |                      |                                                      |
 | -------------------- | ---------------------------------------------------- |
 | Web app              | <https://wbarnha.github.io/ReCite/>                  |
+| Walkthrough          | <https://wbarnha.github.io/ReCite/tutorial.html>     |
 | Word add-in manifest | <https://wbarnha.github.io/ReCite/manifest.xml>      |
 | Privacy              | <https://wbarnha.github.io/ReCite/privacy.html>      |
 | Version              | set by the release tag — see [Releasing](#releasing) |
@@ -128,6 +129,48 @@ from the same origin. Scribe's default is to pull models from a CDN; that is
 overridden, so opening a scan does not tell anyone else that you did. Nothing
 downloads until you actually open a PDF — the first-load bundle is unaffected.
 
+## Try it on the document that made this necessary
+
+The affirmation from _Mata v. Avianca_ — the brief that cited six cases which
+did not exist — is published with the app:
+
+|             |                                                              |
+| ----------- | ------------------------------------------------------------ |
+| The filing  | <https://wbarnha.github.io/ReCite/mata-v-avianca-filing.pdf> |
+| Walkthrough | <https://wbarnha.github.io/ReCite/tutorial.html>             |
+
+Press **Try the example filing** in the app, or drag the PDF in. Eleven pages,
+part typed and part scanned exhibit, so it exercises the PDF text layer and the
+OCR path in one go — about forty seconds, and it finds 25 citations.
+
+The walkthrough goes through it step by step, and the step that matters most is
+the one where **ReCite does not report the fabricated cases**. `925 F.3d 1339
+(11th Cir. 2019)` is not a real citation, but the volume is plausible, the
+series was running in 2019, and the Eleventh Circuit publishes there. Every
+offline rule passes, because every offline rule is about form. Catching a
+fabrication needs an authority list to check against — which is the whole
+lesson, and the reason the walkthrough exists.
+
+## Saving
+
+Choose a format under **Save as**:
+
+|                 |                                                   |
+| --------------- | ------------------------------------------------- |
+| Document        | `.txt` `.md` `.docx` `.odt` `.rtf` `.html` `.pdf` |
+| Findings report | JSON, CSV, Markdown                               |
+
+The list mirrors what ReCite can read, because a tool that opens a `.docx` and
+can only hand back a `.txt` has quietly lost the user's format. The writers are
+dependency-free — `.docx` and `.odt` are built with the browser's own
+`CompressionStream`, and the PDF is written directly, using Helvetica so
+nothing has to be embedded.
+
+Everything is built in the page and handed to the browser as a download. There
+is no upload and no round trip, exactly as when reading a file. Reports record
+the commit that produced them, so a note in a file can be traced to an exact
+build.
+
 ## Fixing
 
 `Fix` applies only **safe** corrections by default — the ones that change how a
@@ -192,6 +235,21 @@ $ pnpm version:show                        # what would this build be?
 $ RECITE_VERSION=v1.2.3 pnpm version:show  # rehearse a release
 ```
 
+## Which build am I looking at?
+
+The footer shows the version, the **commit**, and the build time. The commit is
+a link to the source it was built from.
+
+That matters more than the version here: the site deploys on **every push to
+the default branch**, so the version number alone does not identify a build.
+The commit does. Compare it against
+[`integrity.json`](https://wbarnha.github.io/ReCite/integrity.json) to confirm
+the page in front of you is the build you think it is.
+
+Releases are separate. A published GitHub release builds the Word add-in and
+attaches the manifest, checksums and npm tarballs to the release itself —
+see [Releasing](#releasing). It does not touch Pages.
+
 ## Layout
 
 A pnpm workspace. Each package is plain TypeScript with no runtime
@@ -206,6 +264,8 @@ apps/
 └── web/      the web app and the Word task pane, from one build
 tools/
 ├── version/   works out the release version from the git tag
+├── pages/     generates the walkthrough, privacy, terms and support pages
+├── tessdata/  publishes the OCR language model alongside the app
 ├── manifest/  generates manifest.xml for wherever it is deployed
 ├── integrity/ SHA-256 checksums, SRI injection, verification
 └── icons/     draws the add-in icons at build time
@@ -221,7 +281,7 @@ supplies the authority list know nothing about each other.
 ```console
 $ pnpm install
 $ pnpm dev            # web app on :3000
-$ pnpm test           # 673 tests
+$ pnpm test           # 728 tests
 $ pnpm check          # lint + format + types + tests, what CI runs
 $ pnpm build:release  # build, generate manifest.xml, write checksums
 ```

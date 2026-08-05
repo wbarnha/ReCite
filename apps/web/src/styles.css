@@ -401,3 +401,54 @@ select {
   font-size: 0.9rem;
   opacity: 0.9;
 }
+
+.filedrop-example {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-top: 0.6rem;
+  font-size: 0.88rem;
+  opacity: 0.95;
+}
+
+.filedrop-example span {
+  flex: 1 1 18rem;
+}
+
+/* ------------------------------------------------------------- save as --- */
+
+.saveas {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--rule, #ddd);
+}
+
+.saveas-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.saveas select {
+  padding: 0.3rem 0.4rem;
+  max-width: 16rem;
+}
+
+.saveas-note {
+  flex: 1 1 100%;
+  margin: 0.2rem 0 0;
+  font-size: 0.85rem;
+  opacity: 0.75;
+}
+
+.footer .commit code {
+  text-decoration: underline dotted;
+}
+
+.build-line {
+  font-variant-numeric: tabular-nums;
+}

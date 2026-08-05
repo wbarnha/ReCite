@@ -37,6 +37,12 @@ export default defineConfig(({ mode }) => ({
   define: {
     __RECITE_VERSION__: JSON.stringify(release.product),
     __RECITE_COMMIT__: JSON.stringify(commit()),
+    // So a fork's footer links to the fork's commits rather than to ours.
+    __RECITE_REPO_URL__: JSON.stringify(
+      process.env.GITHUB_REPOSITORY
+        ? `https://github.com/${process.env.GITHUB_REPOSITORY}`
+        : "https://github.com/wbarnha/ReCite",
+    ),
     // Fixed at build time rather than read at runtime, so the string in the
     // bundle is exactly what the checksum in `integrity.json` covers.
     __RECITE_BUILT_AT__: JSON.stringify(

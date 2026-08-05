@@ -53,7 +53,6 @@ describe("nothing in the shipped code can transmit or persist", () => {
 
   // Each of these would break a specific published sentence.
   const FORBIDDEN: ReadonlyArray<readonly [string, RegExp]> = [
-    ["fetch", /\bfetch\s*\(/],
     ["XMLHttpRequest", /\bXMLHttpRequest\b/],
     ["WebSocket", /\bWebSocket\b/],
     ["sendBeacon", /\bsendBeacon\b/],
@@ -70,6 +69,24 @@ describe("nothing in the shipped code can transmit or persist", () => {
       ([path]) => path,
     );
     expect(offenders).toEqual([]);
+  });
+
+  it("uses fetch in exactly one place, for a file published with the app", () => {
+    // The claim was never "no fetch" — it is that nothing leaves the origin.
+    // The example filing is served from this origin and loading it is a
+    // request the user asked for by pressing a button. Pinning the call site
+    // means a second one has to be argued for rather than added quietly.
+    const callers = SHIPPED.filter(([, contents]) => /\bfetch\s*\(/.test(contents)).map(
+      ([path]) => path,
+    );
+    expect(callers).toEqual(["apps/web/src/example.ts"]);
+  });
+
+  it("builds that one URL relative to the page, so it cannot point elsewhere", () => {
+    const example = SHIPPED.find(([path]) => path.endsWith("example.ts"))?.[1] ?? "";
+    expect(example).toContain("document.baseURI");
+    // No absolute URL anywhere in it.
+    expect(example).not.toMatch(/fetch\s*\(\s*["'`]https?:/);
   });
 });
 
@@ -212,9 +229,11 @@ describe("no analytics or telemetry", () => {
     for (const [path, contents] of SHIPPED) {
       for (const match of contents.matchAll(/https?:\/\/([a-z0-9.-]+)/gi)) {
         const host = match[1]?.toLowerCase() ?? "";
-        // w3.org appears as XML namespace identifiers, which are names rather
-        // than addresses and are never fetched.
-        if (host.endsWith("w3.org") || host === "appsforoffice.microsoft.com") continue;
+        // Namespace identifiers, not addresses: w3.org for XML, and
+        // openxmlformats.org for the `.docx` writer. Nothing fetches them —
+        // they are the names OOXML and ODF give their vocabularies.
+        if (host.endsWith("w3.org") || host.endsWith("openxmlformats.org")) continue;
+        if (host === "appsforoffice.microsoft.com") continue;
         if (host.endsWith("github.com") || host.endsWith("github.io")) continue;
         offenders.push(`${path}: ${host}`);
       }

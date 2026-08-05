@@ -286,6 +286,20 @@ Microsoft's CDN and which therefore cannot carry Subresource Integrity. It
 loads only in the Word task pane. The web app's policy does not permit that
 origin at all, so the page cannot reach Microsoft even if something tried.
 
+## The one request the application makes
+
+The app fetches exactly one thing at runtime, and only when asked: the example
+filing published with it, when someone presses **Try the example filing**. The
+URL is built from `document.baseURI`, so it can only resolve to this origin,
+and `connect-src 'self'` means the browser would refuse it otherwise.
+
+`tools/test/privacy-claims.test.ts` pins the call site — a second `fetch`
+anywhere in the shipped source fails the test. That is deliberately annoying:
+adding one should require an argument, not a commit.
+
+Saving a document involves no request at all. The file is built in the page and
+handed to the browser as an object URL.
+
 ## Reporting a problem
 
 Open an issue. If it is a vulnerability rather than a bug, say so in the title

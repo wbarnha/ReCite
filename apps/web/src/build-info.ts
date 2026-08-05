@@ -9,6 +9,7 @@
 declare const __RECITE_VERSION__: string;
 declare const __RECITE_COMMIT__: string;
 declare const __RECITE_BUILT_AT__: string;
+declare const __RECITE_REPO_URL__: string;
 
 export const BUILD_INFO = {
   version: __RECITE_VERSION__,
@@ -17,3 +18,11 @@ export const BUILD_INFO = {
 } as const;
 
 export const SHORT_COMMIT = BUILD_INFO.commit.slice(0, 12);
+
+/**
+ * Where the source lives, so the commit shown in the footer can be a link.
+ *
+ * Baked in at build time from `GITHUB_REPOSITORY` rather than hardcoded, so a
+ * fork's page points at the fork's commits.
+ */
+export const REPO_URL = __RECITE_REPO_URL__;

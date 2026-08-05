@@ -123,6 +123,12 @@ Both can observe that a request for the application was made — the usual web
 server data: IP address, user agent, time. Neither receives any document
 content, because none is sent.
 
+**Can users export documents out of it? Where do those files go?**
+To their own disk, and nowhere else. Saving builds the file in the page and
+hands it to the browser as a download — `.docx`, `.odt`, `.rtf`, `.pdf`,
+`.html`, `.md` or `.txt`, plus a findings report as JSON, CSV or Markdown. No
+request is made, because there is nothing to make one to.
+
 **What is your data retention and deletion policy?**
 There is no retention, so there is nothing to delete. Document text exists in
 page memory and is released when the page closes.

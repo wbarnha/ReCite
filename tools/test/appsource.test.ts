@@ -116,11 +116,12 @@ describe("listing rules", () => {
 describe("the static pages", () => {
   const rendered = PAGES.map((page) => [page.file, renderPage(page)] as const);
 
-  it("publishes the three pages AppSource requires", () => {
+  it("publishes the pages AppSource requires, and the walkthrough", () => {
     expect(PAGES.map((p) => p.file).sort()).toEqual([
       "privacy.html",
       "support.html",
       "terms.html",
+      "tutorial.html",
     ]);
   });
 

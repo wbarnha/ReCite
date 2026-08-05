@@ -139,6 +139,7 @@ ${lede}${page.body}
     <footer>
       <p>
         <a href="./">ReCite</a> &middot;
+        <a href="tutorial.html">Walkthrough</a> &middot;
         <a href="privacy.html">Privacy</a> &middot;
         <a href="terms.html">Terms</a> &middot;
         <a href="support.html">Support</a> &middot;

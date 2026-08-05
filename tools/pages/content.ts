@@ -308,4 +308,175 @@ const support: Page = {
 `,
 };
 
-export const PAGES: readonly Page[] = [privacy, terms, support];
+const tutorial: Page = {
+  file: "tutorial.html",
+  title: "ReCite — Walkthrough",
+  heading: "A walkthrough, with a real filing",
+  lede: `Ten minutes with the document that made citation checking a live issue:
+    the affirmation from <em>Mata v. Avianca</em>, the brief that cited six cases
+    which did not exist.`,
+  body: `
+    <h2>The document</h2>
+    <p>
+      In 2023 a lawyer in the Southern District of New York filed a brief citing
+      six decisions that had never been decided. They had been produced by a
+      chatbot, and they were plausible on their face — real reporters, real
+      courts, years that fit. Opposing counsel could not find them. Neither
+      could the judge.
+    </p>
+    <p>
+      The affirmation the court then asked for is published here, and it is what
+      this walkthrough uses:
+    </p>
+    <div class="panel">
+      <p>
+        <strong><a href="mata-v-avianca-filing.pdf" download>Download the filing (PDF, 441&nbsp;KB)</a></strong><br />
+        <em>Mata v. Avianca, Inc.</em>, No. 1:22-cv-01461 (PKC) (S.D.N.Y. filed
+        Mar. 1, 2023). A public court filing, from the public docket.
+      </p>
+    </div>
+    <p>
+      It is a useful test for a reason beyond its history: eleven pages, part
+      typed and part scanned exhibit, so opening it exercises both ways ReCite
+      reads a PDF.
+    </p>
+
+    <h2>1. Open it</h2>
+    <p>
+      Go to <a href="./">the app</a> and press <strong>Try the example
+      filing</strong> — or download the PDF above and drag it onto the page.
+      Both do the same thing; the button just saves you a step.
+    </p>
+    <p>
+      It takes roughly forty seconds. Most of that is optical character
+      recognition: several pages have no text layer, so there is nothing to read
+      and the words have to be recognised from the image. The status line counts
+      pages as it goes.
+    </p>
+    <div class="panel">
+      <p>
+        <strong>Nothing is uploaded.</strong> The file is read by your browser,
+        from your own disk, and the recognition runs in the page. There is no
+        ReCite server. See the <a href="privacy.html">privacy policy</a> for how
+        that is enforced rather than merely promised.
+      </p>
+    </div>
+
+    <h2>2. Read the warning</h2>
+    <p>
+      When it finishes, the app says the document was <em>partly read by
+      OCR</em>. That warning is not boilerplate. Optical character recognition
+      guesses at characters, and the characters it confuses —
+      <code>1</code> for <code>l</code>, <code>0</code> for <code>O</code>,
+      <code>5</code> for <code>S</code> — are the ones citations are made of.
+      You will see the damage in the text box: <code>Affirma tion</code>,
+      <code>Opposi T I on</code>.
+    </p>
+    <p>
+      So treat what follows as a list of things to look at, not a list of
+      findings to trust. That is true of ReCite generally and doubly true of a
+      scan.
+    </p>
+
+    <h2>3. Check it</h2>
+    <p>
+      Press <strong>Check citations</strong>. ReCite finds about
+      <strong>25 citations</strong> and reports a handful of problems —
+      inconsistent reporter abbreviations, a short form with nothing to attach
+      to, a page range written the long way.
+    </p>
+    <p>
+      Click any finding to jump to it in the document. Each one names the rule
+      that fired, so you can look it up rather than take it on faith.
+    </p>
+
+    <h2>4. Notice what it does <em>not</em> say</h2>
+    <div class="panel">
+      <p>
+        <strong>ReCite does not report that these cases do not exist.</strong>
+        This is the most important thing on this page.
+      </p>
+    </div>
+    <p>
+      <em>Varghese v. China Southern Airlines</em> is cited in this filing as
+      925 F.3d 1339 (11th Cir. 2019). It is not a case. But the volume is
+      plausible, the Federal Reporter's third series was running in 2019, and the
+      Eleventh Circuit publishes there. Every offline check passes, because
+      every offline check is about form.
+    </p>
+    <p>
+      A fabricated citation with a well-chosen reporter, court and year will
+      pass every rule ReCite has. Proving a case exists means looking it up, and
+      that means a source of truth ReCite does not carry.
+    </p>
+
+    <h2>5. Check against an authority list</h2>
+    <p>
+      This is the part that catches a fabrication. Tick <strong>Also check
+      against the sample authority list</strong>. Every citation not in the list
+      is now reported as unverified — including the invented ones.
+    </p>
+    <p>
+      The sample list holds five cases, so on a real brief nearly everything
+      will be flagged. That is the honest behaviour: it is a prompt to check by
+      hand, not evidence a case is fake. Supplying a real list — an export from
+      whatever database your firm uses — is what makes this check sharp.
+    </p>
+
+    <h2>6. Fix what is safe</h2>
+    <p>
+      <strong>Fix</strong> applies only corrections that change how a citation
+      is spelled, never which authority it points at: spacing, abbreviation,
+      the form of a page range. Anything that would change a case, a court or a
+      year is held back behind a checkbox, because a confidently wrong citation
+      is worse than a visibly broken one.
+    </p>
+    <p>
+      Review each change. You accept a correction; ReCite does not accept it for
+      you.
+    </p>
+
+    <h2>7. Save it</h2>
+    <p>
+      Choose a format under <strong>Save as</strong> and press
+      <strong>Download</strong>. The document comes back as
+      <code>.docx</code>, <code>.odt</code>, <code>.rtf</code>,
+      <code>.pdf</code>, <code>.html</code>, <code>.md</code> or
+      <code>.txt</code>.
+    </p>
+    <p>
+      You can also save the <strong>findings report</strong> — as JSON for
+      another tool, CSV for a spreadsheet, or Markdown to paste into a memo. The
+      report records which build produced it, so a note in a file can be traced
+      back to an exact commit.
+    </p>
+    <p>
+      Everything is written in the page and handed to your browser as a
+      download. Again: no upload, no server.
+    </p>
+
+    <h2>What to take from it</h2>
+    <ul>
+      <li>
+        ReCite catches what is <strong>checkable offline</strong>: impossible
+        reporter and year pairings, courts that did not exist, inconsistent
+        abbreviations, short forms pointing at nothing.
+      </li>
+      <li>
+        It cannot catch a <strong>fabrication</strong> without a list of real
+        authorities to check against. Supply one.
+      </li>
+      <li>
+        <strong>A clean run is not a verification.</strong> It proves specific
+        things are wrong. It cannot prove a citation is right, and it is not a
+        citator: it will not tell you an authority has been overruled.
+      </li>
+    </ul>
+    <p>
+      Which is the whole lesson of <em>Mata</em>, really. The problem was never
+      that the citations looked wrong.
+    </p>
+`,
+};
+
+export const PAGES: readonly Page[] = [tutorial, privacy, terms, support];

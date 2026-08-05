@@ -1,13 +1,17 @@
 name: Deploy to GitHub Pages
 
+# The default branch is the site. Every push to it publishes, and nothing else
+# does — releases are handled by `release.yml`, which builds the Word add-in and
+# attaches it to the release rather than touching Pages.
+#
+# The consequence is worth stating: `manifest.xml` served from Pages carries the
+# branch build's version, not the last release's. That is the right way round.
+# A Word user installs the manifest attached to the release, which is versioned
+# and checksummed; the copy on Pages is the current build, for anyone testing
+# from the default branch.
 on:
   push:
-    branches: ["main"]
-  # A release has to redeploy: the manifest served from Pages is the one Word
-  # loads, and it carries the version. Without this the site would keep serving
-  # the last main-branch build and claim the baseline version after a release.
-  release:
-    types: [published]
+    branches: ["master", "main"]
   workflow_dispatch:
 
 # Pages needs these; nothing here writes to the repository.
@@ -42,14 +46,13 @@ jobs:
       # `base_url` comes from the Pages configuration, so a fork deploys to its
       # own URL without anyone editing the manifest. Office will not load an
       # add-in whose manifest points somewhere else.
-      # `RECITE_VERSION` is set only on a release event; on a branch push it
-      # expands to the empty string, which the resolver treats as absent and
-      # falls back to the baseline in version.json.
+      # No `RECITE_VERSION` here: this workflow only ever builds the default
+      # branch, so the version comes from the baseline in `version.json` and
+      # the commit shown in the footer identifies the build exactly.
       - name: Build
         env:
           RECITE_BASE: ${{ steps.pages.outputs.base_path }}/
           RECITE_BASE_URL: ${{ steps.pages.outputs.base_url }}/
-          RECITE_VERSION: ${{ github.event.release.tag_name }}
         run: pnpm build:release
 
       - name: Verify checksums before publishing
