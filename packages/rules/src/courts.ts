@@ -8,6 +8,7 @@ import {
   courtLifespan,
   findReporter,
   resolveCourt,
+  suggestCourts,
 } from "@recite/core";
 
 import type { Rule, RuleContext } from "./rule.js";
@@ -170,3 +171,120 @@ export const ambiguousCourt: Rule = {
     return found;
   },
 };
+
+/**
+ * `526 U.S. 795 (U.S. 1999)` — the reporter has already said which court.
+ *
+ * Bluebook rule 10.4(a): where the reporter unambiguously identifies the
+ * court, the parenthetical carries the year alone. The U.S. Reports carry
+ * only the Supreme Court, so naming it again is redundant. Reported as style
+ * rather than error, because the citation points at the right case either way.
+ *
+ * This is the opposite face of `CT002`. There the parenthetical *contradicts*
+ * a single-court reporter, which means two citations were spliced together;
+ * here it merely repeats it.
+ */
+export const redundantCourt: Rule = {
+  id: "CT005",
+  name: "redundant-court",
+  summary: "Court is named although the reporter already identifies it.",
+  severity: "info",
+
+  check(ctx: RuleContext): Diagnostic[] {
+    const found: Diagnostic[] = [];
+
+    for (const citation of ctx.extraction.citations) {
+      const canonical = citation.reporterCanonical;
+      const at = citation.courtSpan;
+      if (!canonical || !at || citation.courtId !== "scotus") continue;
+
+      const edition = findReporter(canonical);
+      if (!edition?.scotusOnly) continue;
+
+      found.push(
+        diagnose(
+          redundantCourt,
+          citation,
+          `${JSON.stringify(canonical)} reports only the Supreme Court, so rule 10.4(a) leaves the court out: write the year alone.`,
+          {
+            span: at,
+            replacement: "",
+            // Take the space after the court with it, or the fix turns
+            // `(U.S. 1999)` into `( 1999)`.
+            fixSpan: { start: at.start, end: withTrailingSpace(ctx, at.end) },
+            safety: "safe",
+            fixDescription: "Drop the court from the parenthetical",
+            context: { reporter: canonical, written: citation.courtText },
+          },
+        ),
+      );
+    }
+
+    return found;
+  },
+};
+
+/**
+ * `(9 Cir. 2007)`, `(S.D. New York 1990)` — a standard abbreviation, spelled
+ * out.
+ *
+ * Fires only when exactly one court's abbreviation is the same abbreviation
+ * with a token written out in full, which is how these actually go wrong.
+ * Anything vaguer produces no finding: the court table is a curated subset of
+ * the federal and state courts, so "this is not in the table" is not evidence
+ * that it is not a court, and treating it as evidence would flag most of the
+ * judiciary.
+ *
+ * `CT001` handles the forms the table already records as aliases. This one is
+ * for the variants nobody wrote down.
+ */
+export const nonStandardCourt: Rule = {
+  id: "CT006",
+  name: "non-standard-court",
+  summary: "Court is written as a spelled-out variant of a standard abbreviation.",
+  severity: "warning",
+
+  check(ctx: RuleContext): Diagnostic[] {
+    const found: Diagnostic[] = [];
+
+    for (const citation of ctx.extraction.citations) {
+      const written = citation.courtText;
+      const at = citation.courtSpan;
+      if (!written || !at || citation.courtId) continue;
+      // An abbreviation that names several courts is `CT004`'s problem.
+      if (candidateCourts(written).length > 0) continue;
+
+      const suggestions = suggestCourts(written, 2);
+      // Two candidates means we cannot say which was meant, and a citation
+      // checker that renames a court is worse than one that says nothing.
+      if (suggestions.length !== 1) continue;
+      const abbrev = suggestions[0]!;
+
+      found.push(
+        diagnose(
+          nonStandardCourt,
+          citation,
+          `${JSON.stringify(written)} is not a standard court abbreviation. ${JSON.stringify(abbrev)} is, and is the same abbreviation with a word spelled out.`,
+          {
+            span: at,
+            replacement: abbrev,
+            fixSpan: at,
+            safety: "unsafe",
+            fixDescription: `Abbreviate the court as ${JSON.stringify(abbrev)}`,
+            context: { written, suggestion: abbrev },
+          },
+        ),
+      );
+    }
+
+    return found;
+  },
+};
+
+/** Extend an offset over the run of spaces that follows it. */
+function withTrailingSpace(ctx: RuleContext, end: number): number {
+  const { text } = ctx.extraction;
+  let out = end;
+  while (out < text.length && (text[out] === " " || text[out] === "\t")) out++;
+  return out;
+}

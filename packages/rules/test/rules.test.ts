@@ -1,5 +1,8 @@
 /** The rule set, exercised against both synthetic and real citation text. */
 
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
 import { parse } from "@recite/core";
 import type { BluebookProfile, Diagnostic, VerificationResult } from "@recite/core";
 import { describe, expect, it } from "vitest";
@@ -15,12 +18,17 @@ import {
   inconsistentReporterStyle,
   makeContext,
   nonPrecedentialDisposition,
+  nonStandardCourt,
   pageRangeFormat,
   pinCiteOutOfRange,
+  redundantCourt,
   reversedPageRange,
   reporterCourtMismatch,
   reporterFormat,
   runRules,
+  sectionRangeDigits,
+  sectionSymbolCount,
+  shortFormParenthetical,
   selectRules,
   unknownReporter,
   unresolvedShortForm,
@@ -551,5 +559,210 @@ describe("ST003 against pin cites that could fool a heuristic", () => {
     );
     expect(ids(found)).toEqual(["ST003"]);
     expect(found[0]?.context?.suggestion).toBe("371-72");
+  });
+});
+
+describe("CT005 redundant-court", () => {
+  it("reports a court the reporter already identifies", () => {
+    const found = check("Cleveland v. Policy Mgmt., 526 U.S. 795 (U.S. 1999).");
+    expect(ids(found)).toContain("CT005");
+  });
+
+  it("offers a safe fix that leaves the year alone", () => {
+    const [found] = check(
+      "Cleveland v. Policy Mgmt., 526 U.S. 795 (U.S. 1999).",
+      redundantCourt,
+    );
+    expect(found?.correction?.safety).toBe("safe");
+    // Including the space, or the fix produces `( 1999)`.
+    expect(found?.correction?.replacement).toBe("");
+    expect(found?.correction?.span.end).toBeGreaterThan(found!.correction!.span.start);
+  });
+
+  it("says nothing when the parenthetical is already the year alone", () => {
+    expect(check("Iqbal, 556 U.S. 662 (2009).", redundantCourt)).toEqual([]);
+  });
+
+  it("leaves reporters that carry more than one court alone", () => {
+    // F.3d does not identify a court, so `(7th Cir. 2007)` is required, not
+    // redundant.
+    expect(check("Wilson, 502 F.3d 718 (7th Cir. 2007).", redundantCourt)).toEqual([]);
+  });
+});
+
+describe("CT006 non-standard-court", () => {
+  it("reports an abbreviation with a token spelled out", () => {
+    const [found] = check("A v. B, 1 F.3d 300 (9 Cir. 2007).", nonStandardCourt);
+    expect(found?.ruleId).toBe("CT006");
+    expect(found?.correction?.replacement).toBe("9th Cir.");
+    // Renaming a court changes which authority is cited.
+    expect(found?.correction?.safety).toBe("unsafe");
+  });
+
+  it("says nothing about a court it cannot name", () => {
+    // Not in ReCite's court table, so there is nothing to suggest — and "not
+    // in the table" is not evidence that something is not a court.
+    expect(
+      check("A v. B, 1 F. Supp. 3d 300 (N. Dist. Ind. 2014).", nonStandardCourt),
+    ).toEqual([]);
+    expect(check("A v. B, 1 F.3d 300 (C.A. 7. 2007).", nonStandardCourt)).toEqual([]);
+  });
+
+  it("leaves an ambiguous abbreviation to CT004", () => {
+    expect(check("A v. B, 1 N.E.2d 3 (App. Div. 1990).", nonStandardCourt)).toEqual([]);
+  });
+
+  it("leaves a court that resolved alone", () => {
+    expect(check("A v. B, 1 F.3d 300 (9th Cir. 2007).", nonStandardCourt)).toEqual([]);
+  });
+});
+
+describe("ST005 short-form-parenthetical", () => {
+  const BRIEF =
+    "Griggs v. State Farm, 181 F.3d 694 (5th Cir. 1999). Rico v. Flores, 481 F.3d 234 (5th Cir. 2007).";
+
+  it("reports a year on a short form", () => {
+    const found = check(`${BRIEF} Griggs, 181 F.3d at 700 (1999).`);
+    expect(ids(found)).toContain("ST005");
+  });
+
+  it("leaves a short form without one alone", () => {
+    expect(check(`${BRIEF} Griggs, 181 F.3d at 700.`, shortFormParenthetical)).toEqual(
+      [],
+    );
+  });
+
+  it("does not mistake an explanatory parenthetical for a date", () => {
+    // The parenthetical has to be the year and nothing else. An explanation
+    // that happens to mention a year is B1.3's business, not B10.2's.
+    expect(
+      check(
+        `${BRIEF} Griggs, 181 F.3d at 700 (rejecting the 1999 amendment).`,
+        shortFormParenthetical,
+      ),
+    ).toEqual([]);
+  });
+
+  it("leaves full citations alone", () => {
+    expect(check(BRIEF, shortFormParenthetical)).toEqual([]);
+  });
+});
+
+describe("ST006 section-symbol-count", () => {
+  it("reports one symbol for two sections", () => {
+    const [found] = check("18 U.S.C. § 1544, 1546 (2012).", sectionSymbolCount);
+    expect(found?.ruleId).toBe("ST006");
+    expect(found?.correction?.replacement).toBe("§§");
+    // Only the symbol changes, so the authority does not.
+    expect(found?.correction?.safety).toBe("safe");
+  });
+
+  it("reports two symbols for one section", () => {
+    const [found] = check("17 U.S.C. §§ 501 (2012).", sectionSymbolCount);
+    expect(found?.correction?.replacement).toBe("§");
+  });
+
+  it("accepts the correct forms", () => {
+    expect(check("17 U.S.C. § 501 (2012).", sectionSymbolCount)).toEqual([]);
+    expect(check("18 U.S.C. §§ 1544, 1546 (2012).", sectionSymbolCount)).toEqual([]);
+    expect(check("17 U.S.C. §§ 103-107 (2012).", sectionSymbolCount)).toEqual([]);
+  });
+
+  it("does not count a rule's own hyphen as a second section", () => {
+    expect(check("17 C.F.R. § 240.10b-5 (2012).", sectionSymbolCount)).toEqual([]);
+  });
+});
+
+describe("ST007 section-range-digits", () => {
+  it("reports digits dropped from a span of sections", () => {
+    const [found] = check("17 U.S.C. §§ 103-07 (2012).", sectionRangeDigits);
+    expect(found?.ruleId).toBe("ST007");
+    expect(found?.context?.suggestion).toBe("103-107");
+    // No correction: how many digits were dropped is not recoverable from the
+    // citation, so a fix would be guessing.
+    expect(found?.correction).toBeUndefined();
+  });
+
+  it("accepts a span with every digit", () => {
+    expect(check("17 U.S.C. §§ 103-107 (2012).", sectionRangeDigits)).toEqual([]);
+  });
+
+  it("runs the opposite way to the page rule", () => {
+    // Rule 3.2(a) wants `371-72`; rule 3.3(b) wants `103-107`. The same input
+    // shape is right in one place and wrong in the other.
+    const pages = check("A v. B, 1 F.3d 300, 371-372 (2d Cir. 1999).", pageRangeFormat);
+    const sections = check("17 U.S.C. §§ 103-107 (2012).", sectionRangeDigits);
+    expect(ids(pages)).toEqual(["ST003"]);
+    expect(sections).toEqual([]);
+  });
+
+  it("leaves a rule name containing a hyphen alone", () => {
+    expect(check("17 C.F.R. § 240.10b-5 (2012).", sectionRangeDigits)).toEqual([]);
+  });
+});
+
+describe("AU002 against a correctly cited unreported case", () => {
+  it("accepts a docket number as saying the case is unreported", () => {
+    // Rule 10.8.1(a): docket number, database identifier, star page. This is
+    // the correct form, not a citation missing its reporter.
+    expect(
+      check(
+        "Blasius v. Angel Auto., Inc., No. 15-2994, 2016 WL 5929824, at *6 (7th Cir. Oct. 12, 2016).",
+        databaseOnlyCitation,
+      ),
+    ).toEqual([]);
+  });
+
+  it("still reports a bare database number", () => {
+    const found = check(
+      "See Varghese, 2019 WL 4639462 (11th Cir. 2019).",
+      databaseOnlyCitation,
+    );
+    expect(ids(found)).toEqual(["AU002"]);
+  });
+});
+
+describe("RP002 against secondary sources", () => {
+  it("does not offer to rewrite a law review into a case reporter", () => {
+    // The nearest table entry to `U. Pitt. L. Rev.` is `Pitts L.J.`, an 1850s
+    // Pittsburgh case reporter. Taking the suggestion would break a correct
+    // citation.
+    expect(
+      check(
+        "Charles P. Cercone, The War Against Work Product Abuse, 64 U. Pitt. L. Rev. 639 (2003).",
+        unknownReporter,
+      ),
+    ).toEqual([]);
+  });
+
+  it("still reports a mistyped reporter", () => {
+    const found = check(
+      "A v. B, 12 Cal. Rprt. 3d 45 (Cal. Ct. App. 2004).",
+      unknownReporter,
+    );
+    expect(ids(found)).toEqual(["RP002"]);
+  });
+});
+
+describe("the rule reference", () => {
+  // `docs/rules.md` is what a user reads to decide whether a finding matters.
+  // A rule that ships without an entry there is a finding nobody can look up.
+  const reference = readFileSync(
+    fileURLToPath(new URL("../../../docs/rules.md", import.meta.url)),
+    "utf8",
+  );
+
+  it.each(allRules().map((rule) => [rule.id, rule.name] as const))(
+    "documents %s",
+    (id, name) => {
+      expect(reference, `${id} is missing from docs/rules.md`).toContain(`\`${id}\``);
+      expect(reference, `${id} is documented under another name`).toContain(name);
+    },
+  );
+
+  it("documents no rule that does not exist", () => {
+    const documented = [...reference.matchAll(/`([A-Z]{2}\d{3})`/g)].map((m) => m[1]!);
+    const registered = new Set(allRules().map((rule) => rule.id));
+    expect([...new Set(documented)].filter((id) => !registered.has(id))).toEqual([]);
   });
 });

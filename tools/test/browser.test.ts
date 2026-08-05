@@ -202,6 +202,32 @@ describe.skipIf(!runnable)("the published site in a browser", () => {
     await page.close();
   }, 60_000);
 
+  it("offers the edition and the Bluepages/Whitepages rule set", async () => {
+    // Both settings change what gets reported, so both have to be reachable
+    // and have to be labelled the way the book labels them — a lawyer looks
+    // for "Bluepages", not for "practitioner".
+    const { page } = await open();
+
+    const editions = await page
+      .locator("select[aria-label='Bluebook edition'] option")
+      .allTextContents();
+    expect(editions).toEqual(["20th (2015)", "21st (2020)", "22nd (2025)"]);
+
+    const ruleSets = await page
+      .locator("select[aria-label^='Bluebook rule set'] option")
+      .allTextContents();
+    expect(ruleSets.join(" ")).toContain("Bluepages");
+    expect(ruleSets.join(" ")).toContain("Whitepages");
+
+    // And selecting one has to stick, or the choice is decorative.
+    await page.selectOption("select[aria-label^='Bluebook rule set']", "academic");
+    expect(
+      await page.locator("select[aria-label^='Bluebook rule set']").inputValue(),
+    ).toBe("academic");
+
+    await page.close();
+  }, 60_000);
+
   it("opens a .txt file by drag-and-drop target", async () => {
     const { page } = await open();
     await page.setInputFiles("input[type=file]", {

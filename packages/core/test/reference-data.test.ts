@@ -9,7 +9,9 @@ import {
   courtExistedIn,
   resolveCourt,
   splitParenthetical,
+  suggestCourts,
 } from "../src/courts.js";
+import { looksLikePeriodical } from "../src/periodicals.js";
 import { COURTS } from "../src/data/courts.js";
 import { REPORTERS } from "../src/data/reporters.js";
 import {
@@ -161,6 +163,80 @@ describe("resolveCourt", () => {
       expect(resolveCourt(text)).toBeUndefined();
     },
   );
+
+  it("sees through spacing and trailing periods", () => {
+    // `C.A.7` is recorded as an alias; Westlaw prints it `C.A. 7.`, which is
+    // one space and one period away and was invisible to an exact lookup.
+    for (const written of ["C.A.7", "C.A. 7", "C.A. 7.", "c.a. 7"]) {
+      expect(resolveCourt(written)?.id, written).toBe("ca7");
+    }
+  });
+
+  it("does not let punctuation-blindness invent an answer", () => {
+    // The squashed index is a fallback, and it feeds the same multimap: a key
+    // two courts share still identifies neither.
+    expect(resolveCourt("App.Div.")).toBeUndefined();
+    expect(candidateCourts("App.Div.")).toHaveLength(2);
+  });
+
+  it("prefers an exact match to a punctuation-insensitive one", () => {
+    // `S.D.N.Y.` must never be answered by whatever else squashes to the same
+    // letters, so the exact indexes are consulted first and alone.
+    expect(resolveCourt("S.D.N.Y.")?.id).toBe("nysd");
+  });
+});
+
+describe("suggestCourts", () => {
+  it("recognises an abbreviation with a token spelled out", () => {
+    expect(suggestCourts("9 Cir.")).toEqual(["9th Cir."]);
+    expect(suggestCourts("S.D. New York")).toEqual(["S.D.N.Y."]);
+  });
+
+  it("says nothing rather than guessing", () => {
+    // Pure edit distance answered `Cal.` here — a different court in a
+    // different state. Silence is the right failure.
+    expect(suggestCourts("C.A. 7.")).toEqual([]);
+    // Not in the court table at all, so there is nothing to suggest.
+    expect(suggestCourts("N. Dist. Ind.")).toEqual([]);
+  });
+
+  it("never suggests the abbreviation it was given", () => {
+    for (const court of COURTS) {
+      expect(suggestCourts(court.abbrev), court.abbrev).not.toContain(court.abbrev);
+    }
+  });
+
+  it.each(["en banc", "per curiam", ""])("declines %j", (text) => {
+    expect(suggestCourts(text)).toEqual([]);
+  });
+});
+
+describe("looksLikePeriodical", () => {
+  it.each([
+    "U. Pitt. L. Rev.",
+    "Harv. L. Rev.",
+    "Colum. L. Rev",
+    "Yale L.J.",
+    "Geo. L. J.",
+    "J. Legal Stud.",
+    "Harv. J.L. & Tech.",
+  ])("recognises %j", (abbrev) => {
+    expect(looksLikePeriodical(abbrev)).toBe(true);
+  });
+
+  it.each([
+    "F. Supp. 3d",
+    "F.3d",
+    "S. Ct.",
+    "U.S.",
+    "N.J.",
+    "Cal. Rptr. 3d",
+    "N.E.3d",
+    "A.2d",
+    "",
+  ])("leaves %j to the reporter tables", (abbrev) => {
+    expect(looksLikePeriodical(abbrev)).toBe(false);
+  });
 });
 
 describe("splitParenthetical", () => {

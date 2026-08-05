@@ -5,11 +5,15 @@ import { describe, expect, it } from "vitest";
 import {
   abbreviateRange,
   allowsTightenedAbbreviations,
+  BLUEBOOK_EDITIONS,
+  CITATION_STYLES,
   DASH_CHARACTERS,
   describeProfile,
+  editionOrdinal,
   expandTo,
   parsePinCite,
   spacingVariant,
+  styleName,
 } from "../src/bluebook.js";
 import { parse } from "../src/parse.js";
 import { buildPatterns } from "../src/patterns.js";
@@ -165,12 +169,34 @@ describe("edition profiles", () => {
     );
   });
 
-  it("describes itself readably", () => {
+  it("describes itself readably, in the book's own names for its halves", () => {
     expect(describeProfile({ edition: 21, style: "practitioner" })).toBe(
-      "Bluebook 21st edition, court documents",
+      "Bluebook 21st edition, Bluepages (court documents)",
     );
     expect(describeProfile({ edition: 20, style: "academic" })).toBe(
-      "Bluebook 20th edition, scholarly writing",
+      "Bluebook 20th edition, Whitepages (scholarly writing)",
+    );
+  });
+
+  it("names every edition and both rule sets", () => {
+    // A profile the UI can offer but that cannot be described is a profile
+    // that will render as `undefined` somewhere the user can see it.
+    for (const edition of BLUEBOOK_EDITIONS) {
+      expect(editionOrdinal(edition)).toMatch(/^\d+(?:st|nd|rd|th)$/);
+      for (const style of CITATION_STYLES) {
+        expect(describeProfile({ edition, style })).toContain(editionOrdinal(edition));
+        expect(describeProfile({ edition, style })).toContain(styleName(style));
+      }
+    }
+  });
+
+  it("uses the Bluepages and Whitepages names", () => {
+    expect(styleName("practitioner")).toBe("Bluepages");
+    expect(styleName("academic")).toBe("Whitepages");
+    // The Bluepages allowance is what the practitioner setting is *for*, so
+    // the two must not drift apart.
+    expect(allowsTightenedAbbreviations({ edition: 21, style: "practitioner" })).toBe(
+      true,
     );
   });
 });

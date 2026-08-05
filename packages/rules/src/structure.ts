@@ -1,7 +1,14 @@
 /** Rules about how citations hang together in a document (the `ST` family). */
 
 import type { Diagnostic, ParsedCitation } from "@recite/core";
-import { abbreviateRange, isShortForm, parsePinCite } from "@recite/core";
+import {
+  abbreviateRange,
+  dropsSectionDigits,
+  expandSectionEnd,
+  isShortForm,
+  parsePinCite,
+  parseSections,
+} from "@recite/core";
 
 import type { Rule, RuleContext } from "./rule.js";
 import { diagnose } from "./rule.js";
@@ -167,6 +174,147 @@ export const reversedPageRange: Rule = {
     return found;
   },
 };
+
+/**
+ * `Griggs, 181 F.3d at 700-01 (1999)` — a short form carrying a date.
+ *
+ * Bluebook B10.2: the short form is volume, reporter, `at`, page. The court
+ * and the year were given in full the first time and are not repeated. A year
+ * here is usually a full citation that has been edited down by hand, and
+ * whoever did it stopped halfway.
+ */
+export const shortFormParenthetical: Rule = {
+  id: "ST005",
+  name: "short-form-parenthetical",
+  summary: "Short-form citation carries a date parenthetical.",
+  severity: "warning",
+
+  check(ctx: RuleContext): Diagnostic[] {
+    const found: Diagnostic[] = [];
+
+    for (const citation of ctx.extraction.citations) {
+      // `Id.` and `supra` never carry a year, so only the reporter short form
+      // can reach this. A full citation is supposed to have one.
+      if (citation.kind !== "short-form" || citation.year === undefined) continue;
+
+      found.push(
+        diagnose(
+          shortFormParenthetical,
+          citation,
+          `Short form ${JSON.stringify(citation.text)} carries the year ${citation.year}. B10.2 gives the date once, in the full citation.`,
+          { context: { year: citation.year } },
+        ),
+      );
+    }
+
+    return found;
+  },
+};
+
+/**
+ * `18 U.S.C. § 1544, 1546` — two sections behind one section symbol.
+ *
+ * Bluebook rule 3.3(b): `§` for one section, `§§` for more than one. The fix
+ * rewrites only the symbol, so the authority does not change.
+ */
+export const sectionSymbolCount: Rule = {
+  id: "ST006",
+  name: "section-symbol-count",
+  summary: "Section symbol does not match the number of sections cited.",
+  severity: "warning",
+
+  check(ctx: RuleContext): Diagnostic[] {
+    const found: Diagnostic[] = [];
+
+    for (const citation of ctx.extraction.citations) {
+      const symbol = citation.sectionSymbol;
+      const sections = parseSections(citation.sections);
+      if (!symbol || !sections) continue;
+
+      const wanted = sections.join === "single" ? "§" : "§§";
+      if (symbol === wanted) continue;
+
+      const at = symbolSpan(ctx, citation, symbol);
+      const count = sections.items.length;
+
+      found.push(
+        diagnose(
+          sectionSymbolCount,
+          citation,
+          wanted === "§§"
+            ? `${JSON.stringify(citation.text)} cites ${count} sections but uses one section symbol. Rule 3.3(b) takes "§§".`
+            : `${JSON.stringify(citation.text)} cites one section but uses "§§". Rule 3.3(b) takes "§".`,
+          {
+            span: at ?? citation.span,
+            replacement: at ? wanted : undefined,
+            fixSpan: at,
+            safety: "safe",
+            fixDescription: `Write the section symbol as ${JSON.stringify(wanted)}`,
+            context: { written: symbol, expected: wanted, sections: sections.items },
+          },
+        ),
+      );
+    }
+
+    return found;
+  },
+};
+
+/**
+ * `17 U.S.C. §§ 103-07` — a span of sections with digits dropped.
+ *
+ * Rule 3.3(b) runs the opposite way to rule 3.2(a) for pages: pages drop
+ * repetitious digits (`371-72`), sections keep all of them (`103-107`).
+ * Reversing the two is the mistake this rule exists for, and `ST003` is its
+ * counterpart on the page side.
+ */
+export const sectionRangeDigits: Rule = {
+  id: "ST007",
+  name: "section-range-digits",
+  summary: "Span of sections drops digits the Bluebook keeps.",
+  severity: "warning",
+
+  check(ctx: RuleContext): Diagnostic[] {
+    const found: Diagnostic[] = [];
+
+    for (const citation of ctx.extraction.citations) {
+      const sections = parseSections(citation.sections);
+      if (!sections?.span) continue;
+
+      const [from, to] = sections.span;
+      if (!dropsSectionDigits(from, to)) continue;
+
+      const expanded = expandSectionEnd(from, to);
+
+      found.push(
+        diagnose(
+          sectionRangeDigits,
+          citation,
+          `Sections ${from}-${to} should be written ${from}-${expanded}. Rule 3.3(b) keeps every digit in a span of sections — unlike rule 3.2(a) for pages, which drops them.`,
+          {
+            context: { from, to, suggestion: `${from}-${expanded}` },
+          },
+        ),
+      );
+    }
+
+    return found;
+  },
+};
+
+/** Where the section symbol sits, so it can be rewritten in place. */
+function symbolSpan(
+  ctx: RuleContext,
+  citation: ParsedCitation,
+  symbol: string,
+): { start: number; end: number } | undefined {
+  const offset = ctx.extraction.text.indexOf(symbol, citation.span.start);
+  if (offset < 0 || offset >= citation.span.end) return undefined;
+  // `indexOf("§")` finds the first character of `§§` too, so measure the run.
+  let end = offset;
+  while (end < citation.span.end && ctx.extraction.text[end] === "§") end++;
+  return { start: offset, end };
+}
 
 /** Where the opinion starts, following short forms back to their source. */
 function startingPage(ctx: RuleContext, citation: ParsedCitation): number | undefined {

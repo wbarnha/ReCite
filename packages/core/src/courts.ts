@@ -23,17 +23,41 @@ const BY_ID = new Map<string, Court>();
 const BY_ABBREV = new Map<string, Court[]>();
 const BY_ALIAS = new Map<string, Court[]>();
 
+/**
+ * A third index, keyed on the abbreviation with every space and trailing
+ * period removed.
+ *
+ * `C.A.7` is already recorded as an alias of the Seventh Circuit, but Westlaw
+ * prints it `C.A. 7.` — one space and one period away from a key we hold, and
+ * therefore invisible to an exact lookup. Rather than write out every
+ * punctuation variant by hand, this index answers the question "same letters
+ * and digits, arranged the same way?"
+ *
+ * It is a fallback, consulted only when the exact indexes miss, and it feeds
+ * the same multimap machinery: two courts under one squashed key means the
+ * key identifies neither, and the caller refuses to answer. That is what
+ * keeps this from turning punctuation-blindness into a wrong court.
+ */
+const BY_SQUASHED = new Map<string, Court[]>();
+
 function push(index: Map<string, Court[]>, key: string, court: Court): void {
   const bucket = index.get(key);
   if (bucket) bucket.push(court);
   else index.set(key, [court]);
 }
 
+/** `"C.A. 7."` and `"C.A.7"` both become `"c.a.7"`. */
+function squashPunctuation(text: string): string {
+  return normalize(text).replace(/\s+/g, "").replace(/\.+$/, "");
+}
+
 for (const court of COURTS) {
   BY_ID.set(court.id, court);
   push(BY_ABBREV, normalize(court.abbrev), court);
+  push(BY_SQUASHED, squashPunctuation(court.abbrev), court);
   for (const alias of court.aliases ?? []) {
     push(BY_ALIAS, normalize(alias), court);
+    push(BY_SQUASHED, squashPunctuation(alias), court);
   }
 }
 
@@ -80,12 +104,20 @@ export function resolveCourt(text: string): Court | undefined {
  * Abbreviations and aliases are pooled rather than ranked. `App. Div.` is New
  * York's canonical abbreviation and New Jersey's alias; preferring the
  * canonical one would silently relabel every New Jersey appellate cite.
+ *
+ * Punctuation-insensitive matching is a fallback, not a peer: it runs only
+ * when both exact indexes miss, so a spelling that is somebody's real
+ * abbreviation can never be outvoted by another court's stray periods.
  */
 export function candidateCourts(text: string): readonly Court[] {
   const key = normalize(text);
   if (!key || NON_COURT_PARENTHETICALS.has(key)) return [];
 
-  const pooled = [...(BY_ABBREV.get(key) ?? []), ...(BY_ALIAS.get(key) ?? [])];
+  const exact = [...(BY_ABBREV.get(key) ?? []), ...(BY_ALIAS.get(key) ?? [])];
+  const pooled = exact.length
+    ? exact
+    : (BY_SQUASHED.get(squashPunctuation(text)) ?? []);
+
   const seen = new Set<string>();
   return pooled.filter((court) => {
     if (seen.has(court.id)) return false;
@@ -169,4 +201,67 @@ function trimSeparators(value: string): string {
 function stripDateSuffix(head: string): string {
   const cut = Math.max(0, head.length - DATE_SUFFIX_WINDOW);
   return head.slice(0, cut) + head.slice(cut).replace(DATE_SUFFIX, "");
+}
+
+/**
+ * Courts whose standard abbreviation the written text is plainly a variant of.
+ *
+ * Matched by token expansion, not edit distance. Court abbreviations differ
+ * from what people write by *spelling a token out* — `N. Dist. Ind.` for
+ * `N.D. Ind.`, `S.D. New York` for `S.D.N.Y.`, `9 Cir.` for `9th Cir.` — and
+ * an edit-distance match handles that badly in both directions. It scored
+ * `N. Dist. Ind.` as no match at all, and confidently suggested `Cal.` for
+ * `C.A. 7.`, which is a different court in a different state.
+ *
+ * So a candidate qualifies only when it has the same number of tokens and
+ * every one of them is a prefix of its counterpart, in order. That is strict:
+ * `C.A. 7.` gets no suggestion, because nothing here can tell that a Westlaw
+ * convention means the Seventh Circuit. Missing it is the right failure. A
+ * citation checker that renames a court is worse than one that says nothing.
+ */
+export function suggestCourts(written: string, limit = 3): string[] {
+  const key = normalize(written);
+  if (!key || NON_COURT_PARENTHETICALS.has(key)) return [];
+
+  const target = tokenise(written);
+  if (target.length === 0) return [];
+
+  const matches: string[] = [];
+  for (const court of COURTS) {
+    if (matches.length >= limit) break;
+    if (normalize(court.abbrev) === key) continue;
+    if (isVariantOf(target, tokenise(court.abbrev))) matches.push(court.abbrev);
+  }
+  return matches;
+}
+
+function tokenise(text: string): string[] {
+  return text
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+}
+
+/**
+ * Whether `written` is the same abbreviation with tokens spelled out.
+ *
+ * Same count, and each pair share a prefix in whichever direction — `dist`
+ * against `d`, `new` against `n`, `9` against `9th`.
+ */
+function isVariantOf(
+  written: readonly string[],
+  candidate: readonly string[],
+): boolean {
+  if (written.length !== candidate.length) return false;
+
+  let differences = 0;
+  for (const [index, token] of written.entries()) {
+    const other = candidate[index]!;
+    if (token === other) continue;
+    if (!token.startsWith(other) && !other.startsWith(token)) return false;
+    differences++;
+  }
+
+  // At least one token must actually differ, or this is the same string.
+  return differences > 0;
 }

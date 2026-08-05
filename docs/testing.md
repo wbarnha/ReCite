@@ -1,7 +1,7 @@
 # Testing, and where the fixtures come from
 
 ```console
-$ pnpm test          # 768 tests
+$ pnpm test          # 922 tests
 $ pnpm coverage
 $ pnpm check         # lint + format + types + tests, exactly what CI runs
 $ pnpm test:browser  # the built site in real Chromium (needs `pnpm build:release` first)
@@ -81,6 +81,67 @@ Several are there because a plausible implementation gets them wrong:
   `Convention. Miller v. United Airlines`.
 - **A signal is not part of the name.** `See Kaiser Steel Corp.` is a case
   named `Kaiser Steel Corp.`
+
+## The graded corpus
+
+The Mata filing is a corpus of real citations, and it answers "does the parser
+see this?". It cannot answer "is this citation right?", because nothing in it
+is marked right or wrong.
+
+The second corpus is:
+
+> _Experiential Legal Writing I — Citations Quiz_, a 1L review handout
+> (`SBanQuizReviewBluebookCitations1L.pdf`). Twenty questions across cases,
+> statutes and secondary sources, each with the correct citation and the
+> Bluebook rule it comes from.
+
+[`packages/core/test/fixtures/bluebook-quiz.ts`](../packages/core/test/fixtures/bluebook-quiz.ts)
+holds every graded answer with the quiz's verdict on it, and
+[`packages/engine/test/bluebook-quiz.test.ts`](../packages/engine/test/bluebook-quiz.test.ts)
+runs the whole engine over each one. Two invariants:
+
+1. **A citation the quiz grades correct produces no findings.** This is the
+   stricter half. A checker that flags correct work is worse than one that
+   misses errors — the errors were going to be missed anyway, but a false
+   positive costs time and, if acted on, breaks a citation that was right.
+2. **A citation the quiz grades incorrect either produces the findings the
+   fixture names, or carries a written reason why it does not.** Silence is
+   allowed; unexplained silence is not.
+
+The quiz text was extracted from the PDF with ReCite's own OCR importer.
+
+### What it found
+
+Two false positives, both on citations the quiz grades **correct**:
+
+- `64 U. Pitt. L. Rev. 639 (2003)` was reported as a misspelled case reporter,
+  with an offer to rewrite it to `Pitts L.J.` — an 1850s Pittsburgh reporter.
+  Briefs cite law reviews constantly, so this was not a rare shape.
+- `No. 15-2994, 2016 WL 5929824, at *6` was reported as a database citation
+  missing its reporter. The docket number is exactly how rule 10.8.1(a) says a
+  case not yet in the reporters is cited; the complaint amounted to objecting
+  that an unreported case is unreported.
+
+And five rules that were missing: `CT005`, `CT006`, `ST005`, `ST006` and
+`ST007`. `ST007` is the one worth naming — rule 3.3(b) keeps every digit in a
+span of sections while rule 3.2(a) drops them from a span of pages, and
+`ST003` had been checking the page half for some time with nothing checking
+the other.
+
+### What it does not catch
+
+Eight of the quiz's wrong answers produce no finding, each recorded in the
+fixture with the reason. They fall into three groups:
+
+- **Case names.** Party abbreviations (`U.S v. Wilson`), procedural phrases
+  (`in re` for `ex rel.`), and which words abbreviate in a textual sentence.
+  ReCite checks the citation, not the name in front of it.
+- **Prose.** Explanatory parentheticals (`held that` for `holding that`) are a
+  grammar question.
+- **Reference data.** `58 F.3d 882 (N.D. Ind. 2014)` puts a district court in
+  an appellate reporter, but ReCite's court table is a curated subset and does
+  not hold the Northern District of Indiana, so there is no court id to
+  contradict. Closing this one means more court data, not more rules.
 
 ### On the fabricated citations
 

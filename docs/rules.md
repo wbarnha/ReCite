@@ -14,19 +14,39 @@ from a real filing. See [testing.md](testing.md) for where it came from.
 
 ## Which Bluebook
 
-Some rules depend on which edition you are writing to, and on whether you are
-writing a brief or an article. Both are selectable in the app and settable on
-the `Engine`:
+Some rules depend on which edition you are writing to, and on which half of
+the book governs your document. Both are selectable in the app — the two
+dropdowns above the editor — and settable on the `Engine`:
 
 ```ts
 new Engine({ profile: { edition: 21, style: "practitioner" } });
 ```
 
-| Edition    | Style             | Effect                                                               |
-| ---------- | ----------------- | -------------------------------------------------------------------- |
-| 21st, 22nd | court documents   | Reporter abbreviations may be closed up: `119 S.Ct. 662` is accepted |
-| 20th       | either            | Rule 6.1(a) spacing required: `119 S. Ct. 662`                       |
-| any        | scholarly writing | Rule 6.1(a) spacing required                                         |
+### Editions
+
+`20` (2015), `21` (2020) and `22` (2025). The app labels them `20th (2015)`
+and so on; the `Engine` takes the bare number.
+
+### Bluepages or Whitepages
+
+The Bluebook is two rule sets printed on differently coloured paper, and they
+do not always agree:
+
+| Setting        | The book calls it | Governs                                    |
+| -------------- | ----------------- | ------------------------------------------ |
+| `practitioner` | **Bluepages**     | Briefs, motions, memoranda — the `B` rules |
+| `academic`     | **Whitepages**    | Law review footnotes and scholarly writing |
+
+The internal names say what the setting does; the app shows the Bluepages and
+Whitepages names, because that is what a brief-writer looks for.
+
+### What actually changes
+
+| Edition    | Rule set   | Effect                                                               |
+| ---------- | ---------- | -------------------------------------------------------------------- |
+| 21st, 22nd | Bluepages  | Reporter abbreviations may be closed up: `119 S.Ct. 662` is accepted |
+| 20th       | either     | Rule 6.1(a) spacing required: `119 S. Ct. 662`                       |
+| any        | Whitepages | Rule 6.1(a) spacing required                                         |
 
 The allowance is the 21st edition's, and it is a Bluepages rule — it applies
 to court filings, not to law review footnotes. It is also permission rather
@@ -34,8 +54,8 @@ than prescription, so ReCite stops _requiring_ the space rather than
 requiring its removal. `RP003` still fires when a document uses both forms:
 being allowed to tighten is not being allowed to be inconsistent.
 
-The default is the 21st edition for court documents, which is what most people
-checking a brief want.
+The default is the 21st edition, Bluepages, which is what most people checking
+a brief want.
 
 ---
 
@@ -121,6 +141,29 @@ The abbreviation names more than one court. `App. Div.` is both New York's and
 New Jersey's intermediate appellate court; a reader cannot tell which was
 meant, and neither can ReCite, so it says so instead of picking one.
 
+### `CT005` redundant-court · info · safe fix
+
+The reporter already says which court decided the case, so rule 10.4(a) leaves
+it out of the parenthetical: `526 U.S. 795 (U.S. 1999)` should read
+`526 U.S. 795 (1999)`.
+
+The other face of `CT002`. There the parenthetical contradicts a single-court
+reporter, which means two citations were spliced together; here it merely
+repeats it, and the fix is safe because the authority does not change.
+
+### `CT006` non-standard-court · warning · unsafe fix
+
+The court is a standard abbreviation with a word written out: `(9 Cir. 2007)`
+for `(9th Cir. 2007)`, `(S.D. New York 1990)` for `(S.D.N.Y. 1990)`.
+
+Fires only when exactly one court's abbreviation is the same abbreviation
+token for token, each one a prefix of its counterpart. Anything vaguer is left
+alone: ReCite's court table is a curated subset of the judiciary, so "not in
+the table" is not evidence that something is not a court, and a citation
+checker that renames a court is worse than one that says nothing. `(N. Dist.
+Ind. 2014)` therefore gets no finding — the Northern District of Indiana is not
+in the table, so there is nothing to suggest.
+
 ---
 
 ## ST — document structure
@@ -149,6 +192,36 @@ the lower bound is checkable offline, since where an opinion _ends_ is not in
 any local table, but transposed digits usually trip this. Short forms are
 checked against the full citation they resolve to.
 
+### `ST005` short-form-parenthetical · warning · no fix
+
+A short form carrying a date: `Griggs, 181 F.3d at 700-01 (1999)`. B10.2 gives
+the court and the date once, in the full citation. A year here is usually a
+full citation that was edited down by hand and left half-finished.
+
+Only a parenthetical containing the year and nothing else counts. An
+explanatory parenthetical that happens to mention a year is B1.3's business,
+not this rule's.
+
+### `ST006` section-symbol-count · warning · safe fix
+
+`§` for one section, `§§` for more than one (rule 3.3(b)).
+`18 U.S.C. § 1544, 1546` needs the second symbol. The fix rewrites the symbol
+alone, so the authority does not change.
+
+### `ST007` section-range-digits · warning · no fix
+
+A span of sections that drops digits: `17 U.S.C. §§ 103-07` should read
+`§§ 103-107`.
+
+**Rule 3.3(b) runs the opposite way to rule 3.2(a).** Pages drop repetitious
+digits (`371-72`); sections keep all of them (`103-107`). Reversing the two is
+the mistake this rule exists for, and `ST003` is its counterpart on the page
+side.
+
+No fix: `103-07` could have been abbreviated from `107` or from `1007`, and the
+citation itself does not say which. A hyphen inside a rule's name — Rule 10b-5
+in `17 C.F.R. § 240.10b-5` — is not a span and is left alone.
+
 ---
 
 ## AU — weight of authority
@@ -170,8 +243,14 @@ dispositions, which are citable but not binding — a **warning**.
 
 A case cited only by a commercial database number: `2019 WL 4639462`. It
 carries no court, no volume and no page, so a reader without that subscription
-cannot find it and cannot tell whether it was ever published. Silent when a
-parallel reporter citation appears alongside it.
+cannot find it and cannot tell whether it was ever published.
+
+Two things answer the objection and silence the rule: a parallel reporter
+citation, and a docket number. The docket number matters because a case
+genuinely not yet in the reporters is cited by docket number _and_ database
+identifier under rule 10.8.1(a) — `No. 15-2994, 2016 WL 5929824, at *6` is the
+correct form, and complaining about it would be complaining that an unreported
+case is unreported.
 
 ---
 

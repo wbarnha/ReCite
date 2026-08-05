@@ -68,6 +68,13 @@ export const nonPrecedentialDisposition: Rule = {
  * no court, no volume and no page, so a reader without that subscription
  * cannot find it and cannot tell whether it was ever published. When a case
  * has a reporter citation, the Bluebook wants that one.
+ *
+ * Two things answer the objection and silence this rule: a parallel reporter
+ * citation, and a docket number. The docket number matters because a case
+ * genuinely not yet in the reporters is cited by docket number *and* database
+ * identifier under rule 10.8.1(a) — `No. 15-2994, 2016 WL 5929824, at *6` is
+ * the correct form, not a citation missing its reporter, and complaining
+ * about it would be complaining that an unreported case is unreported.
  */
 export const databaseOnlyCitation: Rule = {
   id: "AU002",
@@ -90,6 +97,9 @@ export const databaseOnlyCitation: Rule = {
       );
       if (hasParallel) continue;
 
+      // The docket number is how rule 10.8.1(a) says a case is unreported.
+      if (docketNumberBefore(ctx.extraction.text, citation.fullSpan.start)) continue;
+
       found.push(
         diagnose(
           databaseOnlyCitation,
@@ -103,3 +113,18 @@ export const databaseOnlyCitation: Rule = {
     return found;
   },
 };
+
+/**
+ * `No. 15-2994, ` immediately in front of a citation.
+ *
+ * Anchored at the end and applied to a bounded window, so the cost does not
+ * depend on how long the sentence in front of the citation happens to be.
+ */
+const DOCKET_NUMBER = /\bNos?\.\s{0,4}[\w:-]{2,24}\s{0,4},?\s{0,4}$/;
+
+/** How far back to look. Long enough for `No. 1:22-cv-01461-PKC, `. */
+const DOCKET_WINDOW = 48;
+
+function docketNumberBefore(text: string, start: number): boolean {
+  return DOCKET_NUMBER.test(text.slice(Math.max(0, start - DOCKET_WINDOW), start));
+}

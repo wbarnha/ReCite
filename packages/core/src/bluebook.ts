@@ -30,10 +30,38 @@ export const BLUEBOOK_EDITIONS: readonly BluebookEdition[] = [20, 21, 22];
 /**
  * Which half of the book applies.
  *
- * `practitioner` is the Bluepages — briefs, motions, memoranda.
- * `academic` is the whitepages — law review footnotes and scholarly writing.
+ * The Bluebook is physically two rule sets printed on differently coloured
+ * paper, and lawyers refer to them by that colour:
+ *
+ * - `practitioner` is the **Bluepages** — the blue-edged front section, whose
+ *   `B` rules govern briefs, motions and memoranda filed with a court.
+ * - `academic` is the **Whitepages** — the white main body, whose numbered
+ *   rules govern law review footnotes and scholarly writing.
+ *
+ * The internal names stay `practitioner`/`academic` because they say what the
+ * setting *does*; the Bluepages/Whitepages names are what the user sees, and
+ * are what {@link styleName} and {@link describeProfile} produce.
  */
 export type CitationStyle = "practitioner" | "academic";
+
+export const CITATION_STYLES: readonly CitationStyle[] = ["practitioner", "academic"];
+
+/** The Bluebook's own name for each half. */
+export const STYLE_NAME: Record<CitationStyle, string> = {
+  practitioner: "Bluepages",
+  academic: "Whitepages",
+};
+
+/** What each half is for, in the words a user would use. */
+export const STYLE_SCOPE: Record<CitationStyle, string> = {
+  practitioner: "court documents",
+  academic: "scholarly writing",
+};
+
+/** `"Bluepages"` or `"Whitepages"`. */
+export function styleName(style: CitationStyle): string {
+  return STYLE_NAME[style];
+}
 
 export interface BluebookProfile {
   readonly edition: BluebookEdition;
@@ -46,11 +74,13 @@ export const DEFAULT_PROFILE: BluebookProfile = {
   style: "practitioner",
 };
 
+/** How an edition is spoken: `21` -> `"21st"`. */
+export function editionOrdinal(edition: BluebookEdition): string {
+  return { 20: "20th", 21: "21st", 22: "22nd" }[edition];
+}
+
 export function describeProfile(profile: BluebookProfile): string {
-  const ordinal = { 20: "20th", 21: "21st", 22: "22nd" }[profile.edition];
-  const style =
-    profile.style === "practitioner" ? "court documents" : "scholarly writing";
-  return `Bluebook ${ordinal} edition, ${style}`;
+  return `Bluebook ${editionOrdinal(profile.edition)} edition, ${styleName(profile.style)} (${STYLE_SCOPE[profile.style]})`;
 }
 
 /**

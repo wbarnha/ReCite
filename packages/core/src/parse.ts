@@ -345,12 +345,17 @@ function fullCitationFields(entry: RawMatch): Partial<ParsedCitation> {
           .filter(Boolean)
           .join(" "),
       };
-    case "statute":
+    case "statute": {
+      const section = entry.groups.section;
+      const more = entry.groups.more?.trim();
       return {
         volume: entry.groups.title,
         reporter: entry.groups.code?.replace(/\s+/g, ""),
-        page: entry.groups.section,
+        page: section,
+        sectionSymbol: entry.groups.symbol,
+        sections: section === undefined ? undefined : `${section}${more ? more : ""}`,
       };
+    }
     default:
       return {};
   }
@@ -362,6 +367,9 @@ function canonicalise(written: string | undefined): string | undefined {
   const cleaned = written.trim();
   return findReporter(cleaned)?.abbrev ?? canonicalForVariation(cleaned);
 }
+
+/** A parenthetical holding a year and nothing else: `(1999)`. */
+const BARE_YEAR = /^(?:1[5-9]|20)\d{2}$/;
 
 /**
  * Attach pin cites, parallel citations, parentheticals and case names.
@@ -511,6 +519,28 @@ function enrich(
         nameStart >= 0 ? nameStart : citation.span.start,
         citation.span.end + paren[0].length,
       ),
+    };
+  }
+
+  // A short form should not carry a date at all (B10.2), so a bare year after
+  // one is recorded in order to be reported. Only a parenthetical containing
+  // nothing but the year counts: `181 F.3d at 700 (holding that ...)` is an
+  // explanatory parenthetical and is none of that rule's business, even when
+  // the explanation happens to mention a year.
+  for (let i = 0; i < out.length; i++) {
+    const citation = out[i];
+    if (!citation || citation.kind !== "short-form" || citation.year !== undefined) {
+      continue;
+    }
+
+    const paren = patterns.parenthetical.exec(text.slice(citation.span.end));
+    const body = paren?.[1]?.trim();
+    if (!paren || !body || !BARE_YEAR.test(body)) continue;
+
+    out[i] = {
+      ...citation,
+      year: Number(body),
+      fullSpan: span(citation.span.start, citation.span.end + paren[0].length),
     };
   }
 

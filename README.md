@@ -59,8 +59,13 @@ the tool is candid about the difference.
 | `CT002` | reporter-court-mismatch      | `200 U.S. 1 (9th Cir. 1906)`                           |
 | `CT003` | court-did-not-exist          | a court cited before it was created                    |
 | `CT004` | ambiguous-court              | `App. Div.` — two states use it                        |
+| `CT005` | redundant-court              | `526 U.S. 795 (U.S. 1999)` — the reporter already said |
+| `CT006` | non-standard-court           | `(9 Cir. 2007)`, `(S.D. New York 1990)`                |
 | `ST001` | unresolved-short-form        | `Id.` or `supra` with nothing to point back to         |
 | `ST002` | pin-cite-out-of-range        | `410 U.S. 113, 99` — the pin precedes the first page   |
+| `ST005` | short-form-parenthetical     | `Griggs, 181 F.3d at 700 (1999)` — a dated short form  |
+| `ST006` | section-symbol-count         | `18 U.S.C. § 1544, 1546` — two sections, one `§`       |
+| `ST007` | section-range-digits         | `§§ 103-07` — a section span keeps every digit         |
 | `AU001` | non-precedential-disposition | an unpublished order cited as authority                |
 | `AU002` | database-only-citation       | `2019 WL 4639462` with no reporter cite                |
 | `VF001` | unverified-authority         | a citation absent from your authority list             |
@@ -72,12 +77,19 @@ Full reference: [docs/rules.md](docs/rules.md).
 
 ## Which Bluebook
 
-Pick the edition and the kind of writing; both change what is reported.
+Two dropdowns, both of which change what is reported:
 
-From the **21st edition**, a court filing may close up reporter abbreviations
-to save space, so `119 S.Ct. 662` is a legitimate choice rather than an error.
-Under the **20th**, or in **scholarly writing** — where rule 6.1(a) spacing
-governs whatever the edition — the same citation wants `119 S. Ct. 662`.
+- **Edition** — 20th (2015), 21st (2020) or 22nd (2025).
+- **Rule set** — **Bluepages** for briefs and court documents, **Whitepages**
+  for law review footnotes and scholarly writing. The Bluebook is two rule
+  sets on differently coloured paper and they do not always agree, so ReCite
+  asks which one you are writing to rather than assuming.
+
+From the **21st edition**, the Bluepages let a court filing close up reporter
+abbreviations to save space, so `119 S.Ct. 662` is a legitimate choice rather
+than an error. Under the **20th**, or under the **Whitepages** — where rule
+6.1(a) spacing governs whatever the edition — the same citation wants
+`119 S. Ct. 662`.
 
 Permission is not prescription, so ReCite stops _requiring_ the space rather
 than requiring its removal. `RP003` still fires when a document uses both
@@ -282,7 +294,7 @@ supplies the authority list know nothing about each other.
 ```console
 $ pnpm install
 $ pnpm dev            # web app on :3000
-$ pnpm test           # 768 tests
+$ pnpm test           # 922 tests
 $ pnpm check          # lint + format + types + tests, what CI runs
 $ pnpm build:release  # build, generate manifest.xml, write checksums
 ```

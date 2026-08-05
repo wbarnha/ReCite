@@ -97,6 +97,29 @@ const PAGE_OR_RANGE = String.raw`\d{1,6}(?:\s*${DASH_CLASS}\s*\d{1,6})?`;
 const PIN_BODY = String.raw`(?:${PAGE_OR_RANGE}(?:\s*,\s*${PAGE_OR_RANGE})*|passim)`;
 
 /**
+ * One statutory section: `501`, `362(a)(1)`, `240.10b`, `1.401`.
+ *
+ * Subsection parentheses are bounded at four characters each, which covers
+ * every real one — `(a)`, `(1)`, `(iii)`, `(B)` — and stops the group from
+ * running away into an explanatory parenthetical.
+ *
+ * The body must end in a word character. A section number may contain periods
+ * (`240.10b`, `1.401`) but never ends in one, and without this the sentence
+ * period in `18 U.S.C. §§ 1544, 1546.` is swallowed into the citation.
+ */
+const STATUTE_SECTION = String.raw`\d(?:[\w.]*\w)?(?:\(\w{1,4}\))*`;
+
+/**
+ * What separates one section from the next in a list or a span.
+ *
+ * Commas and dashes only. A semicolon looks like a separator but is not one:
+ * in a string cite it ends the statute and begins the next authority, and
+ * accepting it would let `11 U.S.C. § 362(a); 556 U.S. 662` swallow the case
+ * that follows.
+ */
+const SECTION_SEPARATOR = String.raw`(?:,|${DASH_CLASS})`;
+
+/**
  * Build the pattern set. Exported as a function because each call needs its
  * own `RegExp` objects: `lastIndex` on a `/g/` regex is mutable state, and
  * sharing one across concurrent parses would make matches disappear.
@@ -130,10 +153,23 @@ export function buildPatterns() {
       "g",
     ),
 
-    /** `11 U.S.C. § 362(a)(1)` */
+    /**
+     * `11 U.S.C. § 362(a)(1)`, `18 U.S.C. §§ 1544, 1546`, `17 U.S.C. §§ 103-107`
+     *
+     * The symbol and the trailing sections are captured, not merely skipped,
+     * because rule 3.3(b) is entirely about them: several sections need `§§`
+     * rather than `§`, and a span of sections keeps every digit where a span
+     * of pages would drop the repetitious ones. Neither error is visible from
+     * the first section alone.
+     *
+     * `more` is bounded at nine repetitions and each one must begin with a
+     * literal separator followed by a digit, so there is no way for the engine
+     * to try the same characters two ways.
+     */
     statute: new RegExp(
-      String.raw`\b(?<title>\d{1,3})\s+(?<code>U\.\s*S\.\s*C\.|C\.F\.R\.)\s*(?:§§?\s*)?` +
-        String.raw`(?<section>\d[\w.]*(?:\(\w{1,4}\))*)`,
+      String.raw`\b(?<title>\d{1,3})\s+(?<code>U\.\s*S\.\s*C\.|C\.F\.R\.)\s*(?<symbol>§§?)?\s*` +
+        String.raw`(?<section>${STATUTE_SECTION})` +
+        String.raw`(?<more>(?:\s*${SECTION_SEPARATOR}\s*${STATUTE_SECTION}){0,9})`,
       "g",
     ),
 

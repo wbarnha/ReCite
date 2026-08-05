@@ -103,6 +103,22 @@ export interface ParsedCitation {
   /** Where {@link courtText} sits, so it can be rewritten in place. */
   readonly courtSpan?: Span;
 
+  /**
+   * The section symbol of a statute citation, as written: `"§"` or `"§§"`.
+   *
+   * Kept because rule 3.3(b) turns on which one was used, and the two are
+   * indistinguishable once the citation is reduced to the sections it names.
+   */
+  readonly sectionSymbol?: string;
+  /**
+   * Everything after the section symbol: `"501"`, `"1544, 1546"`, `"103-107"`.
+   *
+   * Stored raw and read by `parseSections`, the same way `pinCite` is stored
+   * raw and read by `parsePinCite` — the rules need to know what the author
+   * typed, not a normalised version of it.
+   */
+  readonly sections?: string;
+
   readonly caseName?: string;
   readonly pinCite?: string;
   /** Database identifier for `database` citations, e.g. `"WL"`. */
@@ -155,6 +171,16 @@ export function lookupKey(citation: ParsedCitation): string | undefined {
     const reporter = citation.reporterCanonical ?? citation.reporter;
     if (citation.volume && reporter && citation.page) {
       return `${citation.volume} ${reporter} ${citation.page}`;
+    }
+    return undefined;
+  }
+  // A statute is an authority like any other, and `Id.` after one refers to
+  // it. Without a key here the `Id.` in `42 U.S.C. § 1983 (2012). Id. § 1985.`
+  // resolves to nothing and gets reported as dangling, which B12.2 says is
+  // the correct form.
+  if (citation.kind === "statute") {
+    if (citation.volume && citation.reporter && citation.page) {
+      return `${citation.volume} ${citation.reporter} § ${citation.page}`;
     }
     return undefined;
   }

@@ -8,6 +8,7 @@ import {
   differsOnlyCosmetically,
   findReporter,
   isKnownReporter,
+  looksLikePeriodical,
   spacingVariant,
   squash,
   suggestReporters,
@@ -129,6 +130,12 @@ export const unknownReporter: Rule = {
       // citation broken across lines by a PDF extractor — annoying, but
       // emphatically not an unknown reporter.
       if (isKnownReporter(token) || canonicalForVariation(token)) continue;
+
+      // `64 U. Pitt. L. Rev. 639` is a law review article, not a mistyped
+      // reporter. Without this the nearest table entry is `Pitts L.J.`, an
+      // 1850s Pittsburgh case reporter, and the rule would offer to rewrite a
+      // correct citation into a wrong one.
+      if (looksLikePeriodical(token)) continue;
 
       const suggestions = suggestReporters(token);
       const best = suggestions[0];

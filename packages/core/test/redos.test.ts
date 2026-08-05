@@ -34,6 +34,11 @@ const ATTACKS: ReadonlyArray<readonly [string, (n: number) => string]> = [
   ["comma-separated numbers", (n) => `1 U.S. 2, ${"3, ".repeat(n)}`],
   ["a storm of dashes", (n) => `1 U.S. 2, ${"3-".repeat(n)}4`],
   ["nested subsection parens", (n) => `11 U.S.C. § 1${"(a)".repeat(n)}`],
+  ["a section list that never ends", (n) => `11 U.S.C. §§ 1${", 2".repeat(n)}`],
+  ["a section span that never ends", (n) => `11 U.S.C. §§ 1${"-2".repeat(n)}`],
+  // `\d(?:[\w.]*\w)?` in a section number is two overlapping character
+  // classes, and a run of periods is what makes an engine try both ways.
+  ["a section number of periods", (n) => `11 U.S.C. § 1${".".repeat(n)}`],
   ["capitalised words", (n) => `${"Abc ".repeat(n)}supra`],
   [
     "spaces inside an abbreviation",
