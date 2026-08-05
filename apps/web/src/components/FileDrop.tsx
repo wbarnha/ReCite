@@ -3,6 +3,9 @@ import { useCallback, useId, useRef, useState } from "react";
 import { EXAMPLE, loadExample } from "../example.js";
 import type { ImportResult } from "../import/index.js";
 import { ACCEPTED_EXTENSIONS, importDocument } from "../import/index.js";
+import type { OcrSettings } from "../import/ocr-options.js";
+import { DEFAULT_OCR_SETTINGS } from "../import/ocr-options.js";
+import { warmForDrag, warmForPicker } from "../import/warmup.js";
 
 /**
  * Open a document from disk.
@@ -16,9 +19,11 @@ import { ACCEPTED_EXTENSIONS, importDocument } from "../import/index.js";
  */
 export function FileDrop({
   onImported,
+  ocr = DEFAULT_OCR_SETTINGS,
   disabled = false,
 }: {
   onImported: (result: ImportResult, name: string) => void;
+  ocr?: OcrSettings;
   disabled?: boolean;
 }) {
   const inputId = useId();
@@ -35,7 +40,7 @@ export function FileDrop({
       setError("");
       setProgress(`Opening ${file.name}…`);
       try {
-        const result = await importDocument(file, setProgress);
+        const result = await importDocument(file, setProgress, ocr);
         onImported(result, file.name);
         setProgress("");
       } catch (problem) {
@@ -45,7 +50,7 @@ export function FileDrop({
         setBusy(false);
       }
     },
-    [onImported],
+    [onImported, ocr],
   );
 
   const openExample = useCallback(async () => {
@@ -78,7 +83,12 @@ export function FileDrop({
         className={`filedrop${dragging ? " dragging" : ""}${busy ? " busy" : ""}`}
         onDragOver={(event) => {
           event.preventDefault();
-          if (!disabled && !busy) setDragging(true);
+          if (disabled || busy) return;
+          setDragging(true);
+          // Start the engine download now, but only for a PDF — the drag
+          // exposes the MIME type before the drop, so dragging a Word file
+          // fetches nothing. See `import/warmup.ts`.
+          warmForDrag(event.dataTransfer);
         }}
         onDragLeave={() => setDragging(false)}
         onDrop={onDrop}
@@ -100,6 +110,9 @@ export function FileDrop({
           className="filedrop-input"
           accept={ACCEPTED_EXTENSIONS.join(",")}
           disabled={disabled || busy}
+          // No file type is knowable until the picker returns, so this warms
+          // the code chunk only and leaves the language model alone.
+          onClick={() => warmForPicker()}
           onChange={(event) => {
             const file = event.target.files?.[0];
             if (file) void open(file);

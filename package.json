@@ -28,6 +28,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:browser": "vitest run tools/test/browser.test.ts",
+    "bench:ocr": "tsx --tsconfig tools/tsconfig.json tools/bench/ocr.ts",
     "coverage": "vitest run --coverage",
     "typecheck": "tsc --build --force",
     "lint": "eslint .",

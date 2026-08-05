@@ -82,6 +82,47 @@ Several are there because a plausible implementation gets them wrong:
 - **A signal is not part of the name.** `See Kaiser Steel Corp.` is a case
   named `Kaiser Steel Corp.`
 
+## Measuring the OCR path
+
+```console
+$ pnpm build:release
+$ pnpm bench:ocr
+```
+
+`tools/bench/ocr.ts` opens a generated scanned PDF in real Chromium and reports
+elapsed time next to **citation recall** — how many of the document's citations
+survived being read. Both, always. `tools/tessdata` documents choosing an 11 MB
+language model over a 2.9 MB one because "a misread digit in a volume number is
+a wrong citation that looks right", and every knob in this area trades the same
+way, so a configuration that is faster and recovers fewer citations is reported
+as a regression rather than an improvement.
+
+The scorer (`tools/bench/accuracy.ts`) compares two strings and knows nothing
+about Scribe. That is deliberate: it is how you would compare Scribe against a
+different engine, which is a live question while the AGPL licensing of
+`scribe.js-ocr` is unresolved.
+
+### What the numbers do not say
+
+Two limits, stated because the table looks more conclusive than it is.
+
+- **The fixture is one page.** The worker sweep therefore measures the startup
+  cost of spinning up workers with no parallelism available to repay it. It
+  says what extra workers cost on a short document and nothing about what they
+  earn on a long one. Changing Scribe's `workerN` default needs a multi-page
+  fixture first, and the default is unchanged.
+- **The timings are loopback.** The engine chunk and the 11 MB model arrive in
+  under 100ms from a local server, which makes the warmup look pointless; on a
+  real connection those two downloads are most of the wait.
+
+### What is not tunable
+
+Render resolution. Scribe hardcodes it — `js/extractPDFText.js:33` computes
+`300 * Math.min(width, 3500) / width` and `extractText` exposes no way to
+change it. Downscaling page images before recognition would mean bypassing
+Scribe's PDF handling entirely, which would also lose the text-layer path, so
+it is not implemented rather than implemented badly.
+
 ## The graded corpus
 
 The Mata filing is a corpus of real citations, and it answers "does the parser

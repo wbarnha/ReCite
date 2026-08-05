@@ -129,7 +129,19 @@ Save as `.docx`, `.rtf` or `.txt` instead.
 
 Pages that already have a text layer are read directly; only pages without one
 are recognised. That is an accuracy decision as much as a speed one — OCRing a
-page that already has perfect text can only make it worse.
+page that already has perfect text can only make it worse. The **OCR** dropdown
+overrides it: _every page_ for a scanner that baked in a bad text layer,
+_never_ when you want no guessed characters in the result at all.
+
+Opening the same file twice in one sitting is instant — the text is kept in
+memory for the tab. Only in memory: a document is still gone when you close it,
+which is the promise the tool is sold on, so nothing is written to IndexedDB or
+any other store that would outlive the page. There is a **Forget opened
+documents** link if you want it gone sooner.
+
+The engine downloads only when there is evidence a PDF is coming: dragging one
+over the drop zone exposes its type before the drop, so dragging a Word file
+still fetches nothing.
 
 **OCR is a machine reading a picture, and it misreads characters** — `1` for
 `l`, `0` for `O`, `5` for `S`. Those are exactly the characters citations are

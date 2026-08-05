@@ -17,41 +17,16 @@
  * still run the suite — but CI has it, and CI is where this has to pass.
  */
 
-import { createServer, type Server } from "node:http";
-import { readFileSync, existsSync } from "node:fs";
-import { extname, join, normalize } from "node:path";
-import { dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { type Server } from "node:http";
 
 import type * as playwrightTypes from "playwright";
 import type { Browser, Page } from "playwright";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { makeScannedPdf } from "./helpers/scanned-pdf.js";
+import { BASE_PATH, CHROMIUM, serveSite, siteIsBuilt } from "./helpers/site-server.js";
 
-const HERE = dirname(fileURLToPath(import.meta.url));
-const ROOT = join(HERE, "..", "..");
-const DIST = join(ROOT, "apps", "web", "dist");
-
-/** The site is served from a sub-path on Pages, so the test does too. */
-const BASE_PATH = "/ReCite/";
-
-const MIME: Record<string, string> = {
-  ".html": "text/html; charset=utf-8",
-  ".js": "text/javascript; charset=utf-8",
-  ".css": "text/css; charset=utf-8",
-  ".wasm": "application/wasm",
-  ".json": "application/json",
-  ".png": "image/png",
-  ".gz": "application/gzip",
-  ".xml": "application/xml",
-  ".map": "application/json",
-};
-
-/** Pre-installed by the environment; Playwright is told not to download one. */
-const CHROMIUM = "/opt/pw-browsers/chromium-1194/chrome-linux/chrome";
-
-const built = existsSync(join(DIST, "index.html")) && existsSync(CHROMIUM);
+const built = siteIsBuilt();
 /** Imported dynamically so the suite still loads where Playwright is absent. */
 let playwright: typeof playwrightTypes | undefined;
 try {
@@ -62,45 +37,6 @@ try {
 
 const runnable = built && playwright !== undefined;
 
-/** Serve `dist/` under the same sub-path GitHub Pages uses. */
-function serve(): Promise<{ server: Server; origin: string }> {
-  const server = createServer((request, response) => {
-    const url = new URL(request.url ?? "/", "http://localhost");
-    let path = decodeURIComponent(url.pathname);
-
-    if (!path.startsWith(BASE_PATH)) {
-      response.writeHead(404).end("outside the base path");
-      return;
-    }
-    path = path.slice(BASE_PATH.length) || "index.html";
-
-    // The served tree is a fixture, but treating a request path as safe is a
-    // habit worth not having.
-    const target = join(DIST, normalize(path).replace(/^(?:\.\.[/\\])+/, ""));
-    if (!target.startsWith(DIST) || !existsSync(target)) {
-      response.writeHead(404).end("not found");
-      return;
-    }
-
-    response.writeHead(200, {
-      "Content-Type": MIME[extname(target)] ?? "application/octet-stream",
-      // Scribe's workers want these for SharedArrayBuffer; harmless otherwise.
-      "Cross-Origin-Opener-Policy": "same-origin",
-      "Cross-Origin-Embedder-Policy": "require-corp",
-      "Cross-Origin-Resource-Policy": "same-origin",
-    });
-    response.end(readFileSync(target));
-  });
-
-  return new Promise((resolve) => {
-    server.listen(0, "127.0.0.1", () => {
-      const address = server.address();
-      const port = typeof address === "object" && address ? address.port : 0;
-      resolve({ server, origin: `http://127.0.0.1:${port}` });
-    });
-  });
-}
-
 describe.skipIf(!runnable)("the published site in a browser", () => {
   let server: Server;
   let origin: string;
@@ -110,7 +46,7 @@ describe.skipIf(!runnable)("the published site in a browser", () => {
   let requested: string[] = [];
 
   beforeAll(async () => {
-    ({ server, origin } = await serve());
+    ({ server, origin } = await serveSite());
     browser = await playwright!.chromium.launch({
       executablePath: CHROMIUM,
       args: ["--no-sandbox"],

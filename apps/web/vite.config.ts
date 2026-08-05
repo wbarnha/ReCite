@@ -4,12 +4,23 @@ import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
+import { tessdataDir } from "../../tools/tessdata/generate.js";
 import { resolveVersion } from "../../tools/version/resolve.js";
 
 // The four-part form, so the string the UI shows is the same one the Office
 // manifest and `integrity.json` carry. On a tagged release this comes from the
 // tag; otherwise from the baseline in `version.json`.
 const release = resolveVersion();
+
+/**
+ * The content-addressed directory the OCR models are served from.
+ *
+ * Derived here from the same function the copier uses, so the URL the app
+ * fetches and the directory the build writes cannot drift apart. If they did,
+ * OCR would fail at the first scanned page with a 404 — at runtime, for a
+ * user, rather than at build time.
+ */
+const tessdata = tessdataDir();
 
 /** The commit the bundle was built from, so a published page can be traced. */
 function commit(): string {
@@ -36,6 +47,7 @@ export default defineConfig(({ mode }) => ({
   plugins: [react()],
   define: {
     __RECITE_VERSION__: JSON.stringify(release.product),
+    __RECITE_TESSDATA_DIR__: JSON.stringify(tessdata),
     __RECITE_COMMIT__: JSON.stringify(commit()),
     // So a fork's footer links to the fork's commits rather than to ours.
     __RECITE_REPO_URL__: JSON.stringify(

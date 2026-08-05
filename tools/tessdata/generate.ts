@@ -24,7 +24,8 @@
  * volume number is a wrong citation that looks right.
  */
 
-import { copyFileSync, mkdirSync, statSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { copyFileSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -32,9 +33,6 @@ import { fileURLToPath } from "node:url";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..", "..");
 const DIST = join(ROOT, "apps", "web", "dist");
-
-/** Served path. Must match `opt.langPath` in `apps/web/src/import/pdf.ts`. */
-export const TESSDATA_DIR = "tessdata";
 
 const LANGUAGES = ["eng"] as const;
 
@@ -47,7 +45,38 @@ function modelPath(lang: string): string {
   return require.resolve(`@tesseract.js-data/${lang}/4.0.0/${lang}.traineddata.gz`);
 }
 
-export function copyTessdata(outDir: string = join(DIST, TESSDATA_DIR)): string[] {
+/**
+ * The served directory name, with the models' content hash in it.
+ *
+ * The reason is caching, and the reason it has to be the *directory* rather
+ * than the file is Scribe: `opt.langPath` is a directory and the library
+ * appends `<lang>.traineddata.gz` itself, so the filename is not ours to
+ * choose. Versioning the directory gets the same effect — the URL changes if
+ * and only if the bytes change.
+ *
+ * What this buys is narrower than it looks, and worth stating plainly. GitHub
+ * Pages does not let anyone set `Cache-Control`; there is no `_headers` file
+ * and no configuration for it. So this cannot make the model cacheable
+ * *longer*. What it does is make revalidation cheap and correct: once Pages'
+ * short freshness window lapses the browser re-checks, the ETag still matches
+ * because a content-addressed URL never changes contents, and the answer is a
+ * 304 instead of eleven megabytes. It also means a model upgrade can never be
+ * served from a stale cache under the old name.
+ *
+ * Computed from the source files in `node_modules`, so the app bundle and this
+ * copier derive the name from one function and cannot disagree.
+ */
+export function tessdataDir(): string {
+  const hash = createHash("sha256");
+  // Sorted, so the name does not depend on array order if a language is added.
+  for (const lang of [...LANGUAGES].sort()) {
+    hash.update(lang);
+    hash.update(readFileSync(modelPath(lang)));
+  }
+  return `tessdata-${hash.digest("hex").slice(0, 12)}`;
+}
+
+export function copyTessdata(outDir: string = join(DIST, tessdataDir())): string[] {
   mkdirSync(outDir, { recursive: true });
 
   return LANGUAGES.map((lang) => {
@@ -60,7 +89,7 @@ export function copyTessdata(outDir: string = join(DIST, TESSDATA_DIR)): string[
 
 function main(): void {
   const written = copyTessdata();
-  console.log(`Copied ${written.length} OCR language model(s):`);
+  console.log(`Copied ${written.length} OCR language model(s) into ${tessdataDir()}/:`);
   for (const path of written) {
     const size = (statSync(path).size / 1024 / 1024).toFixed(1);
     console.log(`  ${path}  (${size} MB)`);
