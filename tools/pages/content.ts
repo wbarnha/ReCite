@@ -20,16 +20,22 @@ const privacy: Page = {
   title: "ReCite — Privacy Policy",
   heading: "Privacy Policy",
   lede: `ReCite does not collect, store, transmit, or have any access to the
-    documents you check. Checking runs entirely inside your browser, or inside
-    your copy of Microsoft Word. There is no ReCite server for your text to be
-    sent to.`,
+    documents you check — including files you open and scanned PDFs it reads
+    with OCR. Everything runs inside your browser, or inside your copy of
+    Microsoft Word. There is no ReCite server for your text to be sent to.`,
   body: `
     <h2>What ReCite does with your document</h2>
     <p>
-      Nothing leaves the page. When you paste text into the web app, or open the
-      task pane in Word, the document is read into memory, checked, and
-      discarded when you close the tab or pane. It is never uploaded, never
-      written to disk by ReCite, and never shared with anyone.
+      Nothing leaves the page. When you paste text, open a file, or use the task
+      pane in Word, the document is read into memory, checked, and discarded
+      when you close the tab or pane. It is never uploaded, never written to
+      disk by ReCite, and never shared with anyone.
+    </p>
+    <p>
+      That includes files you open. A Word document, PDF, RTF or OpenDocument
+      file is read by your browser from your own disk — there is no upload step,
+      because there is nowhere to upload to. Scanned PDFs are read by
+      optical character recognition running inside the page, on your machine.
     </p>
     <p>
       ReCite stores nothing between sessions: no cookies, no
@@ -37,10 +43,22 @@ const privacy: Page = {
       Closing the page ends everything.
     </p>
     <p>
-      The application makes no network requests of its own while it runs. Its
-      Content Security Policy sets <code>connect-src 'none'</code>, so the
-      browser itself refuses to open a connection. That is a restriction
-      enforced by your browser, not a promise made by us.
+      The web app is allowed to load its own code from its own address and
+      nothing else. Its Content Security Policy sets
+      <code>connect-src 'self'</code>, so your browser refuses every request it
+      might make to any other site. That is a restriction enforced by the
+      browser, not a promise made by us. The Word add-in is stricter still —
+      <code>connect-src 'none'</code> — because Word hands it the document
+      directly and it has nothing to load.
+    </p>
+    <p>
+      The one thing the web app does load from its own address is the OCR
+      engine, and only if you open a scanned PDF. Reading a scan means
+      recognising characters in an image, which needs a recognition engine and
+      a language model. Both are published alongside this page and are served
+      from here. The library ReCite uses would fetch its language models from a
+      third-party CDN by default; that default is overridden, precisely so that
+      opening a scan does not tell anyone else that you did.
     </p>
 
     <h2>What we collect</h2>
@@ -181,6 +199,16 @@ const terms: Page = {
       <li>
         Its reporter and court tables are not exhaustive, and an unrecognised
         reporter is reported as unknown rather than as wrong.
+      </li>
+      <li>
+        <strong>Text read from a scanned PDF by OCR is a machine's reading of
+        an image, not the document itself.</strong> Optical character
+        recognition misreads characters, and the ones it confuses most —
+        <code>1</code> for <code>l</code>, <code>0</code> for <code>O</code>,
+        <code>5</code> for <code>S</code> — are the ones citations are made of.
+        A volume, page or year recovered this way may be wrong even when it
+        looks right. ReCite marks a document read this way and says how many
+        pages it recognised; check anything it reports against the original.
       </li>
     </ul>
 

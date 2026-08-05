@@ -77,13 +77,28 @@ describe("the Content Security Policy backs the claim", () => {
   const csp = (html: string) =>
     /http-equiv="Content-Security-Policy"\s*content="([^"]*)"/.exec(html)?.[1] ?? "";
 
-  it.each([
-    ["index.html", indexHtml],
-    ["taskpane.html", taskpaneHtml],
-  ])("%s forbids opening any connection", (_file, html) => {
-    // The load-bearing directive. Without it every other claim is a promise
-    // rather than something the browser refuses to do.
-    expect(csp(html)).toContain("connect-src 'none'");
+  it("the task pane forbids opening any connection at all", () => {
+    // The strictest of the two, and it stays that way: the task pane runs on
+    // an open client document inside Word, and it has no OCR to load because
+    // Word supplies the text.
+    expect(csp(taskpaneHtml)).toContain("connect-src 'none'");
+  });
+
+  it("the web app allows connections to its own origin and nowhere else", () => {
+    // Relaxed from 'none' when in-browser OCR arrived: a WebAssembly engine
+    // has to be fetched before it can run. `'self'` keeps the guarantee that
+    // actually matters — the browser still refuses every cross-origin
+    // request, so document text cannot leave the machine.
+    const directive = /connect-src ([^;]*)/.exec(csp(indexHtml))?.[1]?.trim();
+    expect(directive).toBe("'self'");
+  });
+
+  it("neither page allows a connection to any external origin", () => {
+    for (const html of [indexHtml, taskpaneHtml]) {
+      const directive = /connect-src ([^;]*)/.exec(csp(html))?.[1] ?? "";
+      expect(directive).not.toMatch(/https?:/);
+      expect(directive).not.toContain("*");
+    }
   });
 
   it.each([
@@ -121,7 +136,17 @@ describe("office.js is confined to the Word task pane", () => {
     // Stronger than the above and the reason this test exists: even a bug or
     // a tampered bundle cannot make the web app reach Microsoft, because the
     // browser will refuse.
-    expect(scriptSrc(indexHtml)).toBe("'self'");
+    //
+    // Asserted as "no external host" rather than as an exact string, because
+    // the directive legitimately gained `'wasm-unsafe-eval'` when in-browser
+    // OCR arrived. Pinning the whole value would have failed on a change that
+    // does not weaken the claim, and the claim is about hosts.
+    const directive = scriptSrc(indexHtml);
+    expect(directive).toContain("'self'");
+    expect(directive).not.toMatch(/https?:/);
+    expect(directive).not.toContain("appsforoffice");
+    expect(directive).not.toContain("'unsafe-inline'");
+    expect(directive).not.toContain("'unsafe-eval'");
   });
 
   it("the task pane does load it, from Microsoft's own origin", () => {

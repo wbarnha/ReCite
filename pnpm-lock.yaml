@@ -35,6 +35,9 @@ importers:
       eslint-plugin-regexp:
         specifier: ^2.10.0
         version: 2.10.0(eslint@9.39.5)
+      playwright:
+        specifier: ^1.62.1
+        version: 1.62.1
       prettier:
         specifier: ^3.3.3
         version: 3.9.6
@@ -68,7 +71,13 @@ importers:
       react-dom:
         specifier: ^18.3.1
         version: 18.3.1(react@18.3.1)
+      scribe.js-ocr:
+        specifier: ^0.14.3
+        version: 0.14.3
     devDependencies:
+      '@tesseract.js-data/eng':
+        specifier: ^1.0.0
+        version: 1.0.0
       '@types/office-js':
         specifier: ^1.0.377
         version: 1.0.604
@@ -445,8 +454,86 @@ packages:
   '@rolldown/pluginutils@1.0.1':
     resolution: {integrity: sha512-2j9bGt5Jh8hj+vPtgzPtl72j0yRxHAyumoo6TNfAjsLB04UtpSvPbPcDcBMxz7n+9CYB0c1GxQFxYRg2jimqGw==}
 
+  '@scribe.js/canvas-android-arm64@0.1.97-scribe.6':
+    resolution: {integrity: sha512-sX4z2hI/lx4hSOqCt3LLEeQz6/bwHB4A4HTP08BF/hRL5X1PfAO7B/V2hdZmkvjPLFmLJI35Xf6Zr3DXkJN/FA==}
+    engines: {node: '>= 10'}
+    cpu: [arm64]
+    os: [android]
+
+  '@scribe.js/canvas-darwin-arm64@0.1.97-scribe.6':
+    resolution: {integrity: sha512-IprfXMuSXpd9GXiH+/8BriMR11RCmivGhiEsuUWBt9Ztn28wplvB6zfzLq7cLUsK35xcN48XMojO+c3HS3mXRw==}
+    engines: {node: '>= 10'}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@scribe.js/canvas-darwin-x64@0.1.97-scribe.6':
+    resolution: {integrity: sha512-+vj6H2b5hqXo3kuu4tAz7aCFPof2T+TfZI99Sd20P+5wSXa7fgDAbKVvhwXdgl3Musu0e/YwFwyekaPjaA/HQA==}
+    engines: {node: '>= 10'}
+    cpu: [x64]
+    os: [darwin]
+
+  '@scribe.js/canvas-linux-arm-gnueabihf@0.1.97-scribe.6':
+    resolution: {integrity: sha512-KRIHDuZM4Rdds3zLYx/MvjzwAFUlzwGMZ34djTJGMN4LNWSElH0BRr6gUDnDpMGfKxkygbS2gM6SA5x1iUdpGw==}
+    engines: {node: '>= 10'}
+    cpu: [arm]
+    os: [linux]
+
+  '@scribe.js/canvas-linux-arm64-gnu@0.1.97-scribe.6':
+    resolution: {integrity: sha512-PIrHCyV7misj4QUtIsFVPsAJYkNFdBfRDXdedYMb+lG0F0mGlIgUFWxtw50VVMVGpT5tu45upa3s/Yzi0NoZyw==}
+    engines: {node: '>= 10'}
+    cpu: [arm64]
+    os: [linux]
+    libc: [glibc]
+
+  '@scribe.js/canvas-linux-arm64-musl@0.1.97-scribe.6':
+    resolution: {integrity: sha512-CWJ3OkRnGeAUQjtKVZMK4PEYV/4RnXjiIRQM69qhHhxSR31y2i9hQak1CwPFUbpw1Dn/tbLdfhzKiGwWUdM6eQ==}
+    engines: {node: '>= 10'}
+    cpu: [arm64]
+    os: [linux]
+    libc: [musl]
+
+  '@scribe.js/canvas-linux-riscv64-gnu@0.1.97-scribe.6':
+    resolution: {integrity: sha512-z5dC1Bbrydv9Q6CwXO1X4Xw0jPZN7LYkbmuSxozs2eqiHBtKl63MbOuHXHwKOwMiGlYxTW7xqoEpRHs91Nc9Qw==}
+    engines: {node: '>= 10'}
+    cpu: [riscv64]
+    os: [linux]
+    libc: [glibc]
+
+  '@scribe.js/canvas-linux-x64-gnu@0.1.97-scribe.6':
+    resolution: {integrity: sha512-JLY+MAtDwpEnJ3gTaw24Aike8H40XsjClXVJPu7V6PeMBmzqPl2COdtNh4FJrHIBc0tIqmbyueUzHd+YuJZTPw==}
+    engines: {node: '>= 10'}
+    cpu: [x64]
+    os: [linux]
+    libc: [glibc]
+
+  '@scribe.js/canvas-linux-x64-musl@0.1.97-scribe.6':
+    resolution: {integrity: sha512-tzDcPdhGVYmaiudBkUtQeVbY8NvvW0eAKxui3fJQhrmvPfYrSeq97uhGtXYi5Rx77VKXFvvCpO4aRTuQGgh/OQ==}
+    engines: {node: '>= 10'}
+    cpu: [x64]
+    os: [linux]
+    libc: [musl]
+
+  '@scribe.js/canvas-win32-arm64-msvc@0.1.97-scribe.6':
+    resolution: {integrity: sha512-oRxhb+eAddNhfc9EJD1zSxc0NiK/3o1GVbbW5B4RSlqbtIzmW1vengMFnJD7tRI3PcxjphYagzFiqePKzOikiQ==}
+    engines: {node: '>= 10'}
+    cpu: [arm64]
+    os: [win32]
+
+  '@scribe.js/canvas-win32-x64-msvc@0.1.97-scribe.6':
+    resolution: {integrity: sha512-3OSGftjjTpk+eDAcGwoJjOzMvs+H6u10qpRLYiEhvgxkjMF/rw7+ug15D8rD4DEgY5dyLMAIj53FDvkRGFSI3g==}
+    engines: {node: '>= 10'}
+    cpu: [x64]
+    os: [win32]
+
+  '@scribe.js/canvas@0.1.97-scribe.6':
+    resolution: {integrity: sha512-04gMwCjT9qSY+SKkoZzmripcFw03/qBp0B1l/SrQA7zhZ8qXTmU1V/IHSnqSKhk+2udP8QyRXmhjz+omife7uQ==}
+    engines: {node: '>= 10'}
+
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
+
+  '@tesseract.js-data/eng@1.0.0':
+    resolution: {integrity: sha512-mbTumm6KQPUHyzTPQaF3ObXYnx0SqqfV2nabqFVQBwD6Kl7PhGSLSzOlfFTWy0P3BjghaSKA2W9GB19Jk+ZcTg==}
 
   '@types/chai@5.2.3':
     resolution: {integrity: sha512-Mw558oeA9fFbv65/y4mHtXDs9bPnFMZAL/jxdPFUpOHHIXX91mcgEHbS5Lahr+pwZFR8A7GQleRWeI6cGFC2UA==}
@@ -726,6 +813,10 @@ packages:
   color-name@1.1.4:
     resolution: {integrity: sha512-dOy+3AuW3a2wNbZHIuMZpTcgjGuLU/uBL/ubcZF9OXbDo8ff4O8yVp5Bf0efS8uEoYo5q4Fx7dY9OgQGXgAsQA==}
 
+  commander@11.1.0:
+    resolution: {integrity: sha512-yPVavfyCcRhmorC7rWlkHn15b4wDVgVmBA7kV4QVBsF7kv/9TKJAbAXVTxvTnwP8HHKjRCJDClKbciiYS7p0DQ==}
+    engines: {node: '>=16'}
+
   comment-parser@1.4.7:
     resolution: {integrity: sha512-0h+uSNtQGW3D98eQt3jJ8L06Fves8hncB4V/PKdw/Qb8Hnk19VaKuTr55UNRYiSoVa7WwrFls+rh3ux9agmkeQ==}
     engines: {node: '>= 12.0.0'}
@@ -954,6 +1045,11 @@ packages:
   for-each@0.3.5:
     resolution: {integrity: sha512-dKx12eRCVIzqCxFGplyFKJMPvLEWgmNtUrpTiJIR5u97zEhRG8ySrtboPHZXx7daLxQVrl643cTzbab2tkQjxg==}
     engines: {node: '>= 0.4'}
+
+  fsevents@2.3.2:
+    resolution: {integrity: sha512-xiqMQR4xAeHTuB9uWm+fFRcIOgKBMiOBP+eXiyT7jsgVCq1bkVygt00oASowB7EdtpOHaaPgKt812P9ab+DDKA==}
+    engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
+    os: [darwin]
 
   fsevents@2.3.3:
     resolution: {integrity: sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw==}
@@ -1409,6 +1505,16 @@ packages:
     resolution: {integrity: sha512-RvwwcruNjI1ncT5xRakeyS9Lf8lcItv34KD+aif+VH9kduAyfYBipGh12274xtenIPZ119/R9BdTBa8gAwSh0A==}
     engines: {node: '>=12'}
 
+  playwright-core@1.62.1:
+    resolution: {integrity: sha512-wPYSwEBJY9GHraISXqyqtx0na0LpO3XEX7jNDhntbex7tzUS7kLnZsOlFruFJB4Hi/rhDMjXGqHewDZ68nYZVw==}
+    engines: {node: '>=20'}
+    hasBin: true
+
+  playwright@1.62.1:
+    resolution: {integrity: sha512-0M+L3LAD8/nm554LOla9Ayx0j0tmFZ0FBcoQ7F1VuVHpM/XpiC8RcDzBQB8W5+hA8L22THxELzeF+2WcUzvcLg==}
+    engines: {node: '>=20'}
+    hasBin: true
+
   possible-typed-array-names@1.1.0:
     resolution: {integrity: sha512-/+5VFTchJDoVj3bhoqi6UeymcD00DAwb1nJwamzPvHEszJ4FpF6SNNbUbOS8yI56qHzdV8eK0qEfOSiodkTdxg==}
     engines: {node: '>= 0.4'}
@@ -1489,6 +1595,10 @@ packages:
 
   scheduler@0.23.2:
     resolution: {integrity: sha512-UOShsPwz7NrMUqhR6t0hWjFduvOzbtv7toDH1/hIrfRNIDBnnBWd0CwJTGvTpngVlmwGCdP9/Zl/tVrDqcuYzQ==}
+
+  scribe.js-ocr@0.14.3:
+    resolution: {integrity: sha512-lOhYoOTm3PO6P1OYSGh4Q+NQTaktWakoWCQ/g9rjPHOhQEKTu/O+YY18W5JnWIRkUUv7RGLyVDjZfD6TNsBT5Q==}
+    hasBin: true
 
   scslre@0.3.0:
     resolution: {integrity: sha512-3A6sD0WYP7+QrjbfNA2FN3FsOaGGFoekCVgTyypy53gPxhbkCIjtO6YWgdrfM+n/8sI8JeXZOIxsHjMTNxQ4nQ==}
@@ -1989,7 +2099,56 @@ snapshots:
 
   '@rolldown/pluginutils@1.0.1': {}
 
+  '@scribe.js/canvas-android-arm64@0.1.97-scribe.6':
+    optional: true
+
+  '@scribe.js/canvas-darwin-arm64@0.1.97-scribe.6':
+    optional: true
+
+  '@scribe.js/canvas-darwin-x64@0.1.97-scribe.6':
+    optional: true
+
+  '@scribe.js/canvas-linux-arm-gnueabihf@0.1.97-scribe.6':
+    optional: true
+
+  '@scribe.js/canvas-linux-arm64-gnu@0.1.97-scribe.6':
+    optional: true
+
+  '@scribe.js/canvas-linux-arm64-musl@0.1.97-scribe.6':
+    optional: true
+
+  '@scribe.js/canvas-linux-riscv64-gnu@0.1.97-scribe.6':
+    optional: true
+
+  '@scribe.js/canvas-linux-x64-gnu@0.1.97-scribe.6':
+    optional: true
+
+  '@scribe.js/canvas-linux-x64-musl@0.1.97-scribe.6':
+    optional: true
+
+  '@scribe.js/canvas-win32-arm64-msvc@0.1.97-scribe.6':
+    optional: true
+
+  '@scribe.js/canvas-win32-x64-msvc@0.1.97-scribe.6':
+    optional: true
+
+  '@scribe.js/canvas@0.1.97-scribe.6':
+    optionalDependencies:
+      '@scribe.js/canvas-android-arm64': 0.1.97-scribe.6
+      '@scribe.js/canvas-darwin-arm64': 0.1.97-scribe.6
+      '@scribe.js/canvas-darwin-x64': 0.1.97-scribe.6
+      '@scribe.js/canvas-linux-arm-gnueabihf': 0.1.97-scribe.6
+      '@scribe.js/canvas-linux-arm64-gnu': 0.1.97-scribe.6
+      '@scribe.js/canvas-linux-arm64-musl': 0.1.97-scribe.6
+      '@scribe.js/canvas-linux-riscv64-gnu': 0.1.97-scribe.6
+      '@scribe.js/canvas-linux-x64-gnu': 0.1.97-scribe.6
+      '@scribe.js/canvas-linux-x64-musl': 0.1.97-scribe.6
+      '@scribe.js/canvas-win32-arm64-msvc': 0.1.97-scribe.6
+      '@scribe.js/canvas-win32-x64-msvc': 0.1.97-scribe.6
+
   '@standard-schema/spec@1.1.0': {}
+
+  '@tesseract.js-data/eng@1.0.0': {}
 
   '@types/chai@5.2.3':
     dependencies:
@@ -2324,6 +2483,8 @@ snapshots:
       color-name: 1.1.4
 
   color-name@1.1.4: {}
+
+  commander@11.1.0: {}
 
   comment-parser@1.4.7: {}
 
@@ -2694,6 +2855,9 @@ snapshots:
   for-each@0.3.5:
     dependencies:
       is-callable: 1.2.7
+
+  fsevents@2.3.2:
+    optional: true
 
   fsevents@2.3.3:
     optional: true
@@ -3142,6 +3306,14 @@ snapshots:
 
   picomatch@4.0.5: {}
 
+  playwright-core@1.62.1: {}
+
+  playwright@1.62.1:
+    dependencies:
+      playwright-core: 1.62.1
+    optionalDependencies:
+      fsevents: 2.3.2
+
   possible-typed-array-names@1.1.0: {}
 
   postcss@8.5.25:
@@ -3256,6 +3428,11 @@ snapshots:
   scheduler@0.23.2:
     dependencies:
       loose-envify: 1.4.0
+
+  scribe.js-ocr@0.14.3:
+    dependencies:
+      '@scribe.js/canvas': 0.1.97-scribe.6
+      commander: 11.1.0
 
   scslre@0.3.0:
     dependencies:

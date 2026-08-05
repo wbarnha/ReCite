@@ -19,3 +19,6 @@ coverage/
 # Local env
 .env
 .env.local
+
+# Playwright browsers, when installed into the workspace by CI
+.playwright/

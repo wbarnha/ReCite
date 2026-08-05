@@ -20,10 +20,20 @@
       only the task pane does. Listing Microsoft's origin here anyway would
       have permitted a request this page never makes, which is the difference
       between a privacy claim that is true and one the browser enforces.
+
+      `connect-src 'self'` and not 'none', which the task pane still uses.
+      Reading a scanned PDF means running an OCR engine, and a WebAssembly
+      engine has to be fetched before it can run. Restricting it to this origin
+      keeps the guarantee that matters — the browser will still refuse any
+      cross-origin request, so document text cannot leave — while allowing the
+      app to load its own code. The OCR language models are published beside
+      the app for the same reason: Scribe's default is to pull them from a CDN,
+      which would have put a third party in the path of a document check.
+      See docs/security.md.
     -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'none'; form-action 'none'; base-uri 'none'"
+      content="default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; form-action 'none'; base-uri 'none'"
     />
     <title>ReCite — find and fix broken case law citations</title>
     <meta

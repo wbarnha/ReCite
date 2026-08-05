@@ -1,10 +1,24 @@
 # Testing, and where the fixtures come from
 
 ```console
-$ pnpm test          # 425 tests
+$ pnpm test          # 673 tests
 $ pnpm coverage
 $ pnpm check         # lint + format + types + tests, exactly what CI runs
+$ pnpm test:browser  # the built site in real Chromium (needs `pnpm build:release` first)
 ```
+
+`pnpm test:browser` is separate because it needs a build and a browser. It is
+the only place two claims can actually be checked: that OCR turns a scanned
+page into readable citations, and that nothing the app does leaves the origin.
+The second is not paranoia — Scribe's CDN fallback URL is still a string in the
+bundle, because it is the default in library code we do not control, so the
+override has to be **observed** rather than assumed. The test intercepts every
+request and fails if one goes off-origin.
+
+Its scanned-PDF fixture is generated, not committed: text is rendered in
+Chromium, screenshotted as a JPEG, and wrapped in a hand-written one-page PDF
+with no text layer at all. A PDF with a text layer would not exercise OCR,
+because the reader would correctly read the text layer instead.
 
 Tests import workspace packages through aliases that point at `src`, not
 `dist` — see [`vitest.config.ts`](../vitest.config.ts). A suite that ran

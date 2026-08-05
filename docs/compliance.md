@@ -69,17 +69,17 @@ selling you a badge.
 Offered as evidence a reviewer can verify, not as an audit result. No CPA firm
 has examined any of this.
 
-| Criterion                      | What applies here                                                                                                                                                                                                  | How you can check it                                                                     |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
-| **CC6.1** Logical access       | No accounts, no authentication, no authorization surface. There is nothing to gain access to.                                                                                                                      | No auth code exists anywhere in the repository.                                          |
-| **CC6.6** Boundary protection  | `connect-src 'none'` in the Content Security Policy: the browser refuses to open any network connection from the app.                                                                                              | View source on the page; check the CSP `<meta>` tag. Enforced by the browser, not by us. |
-| **CC6.7** Transmission of data | No transmission occurs. There is no endpoint to transmit to.                                                                                                                                                       | Open your browser's network panel and check a document. No requests.                     |
-| **CC7.1** Detection of change  | Every release publishes SHA-256 checksums of every file, plus SHA-384 Subresource Integrity on every script, stylesheet and preloaded module. A tampered asset fails to execute rather than failing to be noticed. | `curl -fsSLO <site>/checksums.sha256 && sha256sum -c checksums.sha256`                   |
-| **CC7.2** Monitoring           | CI re-fetches the deployed site after every deploy and verifies it against its own published digests.                                                                                                              | `.github/workflows/deploy.yml`, job `verify-published`.                                  |
-| **CC8.1** Change management    | Every change is a public commit. Releases are tagged, and the version in the manifest is derived from the tag and re-verified against it during the release build.                                                 | Public git history; `.github/workflows/release.yml`.                                     |
-| **A1.2** Availability          | Not applicable in the usual sense: a loaded page keeps working with no network at all. There is no service to be unavailable.                                                                                      | Load the app, disconnect, keep working.                                                  |
-| **C1.1** Confidentiality       | Confidential information is never received, so it is never stored, retained, or disposed of.                                                                                                                       | The absence of any storage API in the source.                                            |
-| **P** Privacy                  | No personal information is collected.                                                                                                                                                                              | `privacy.html`, and the absence of analytics or telemetry in the bundle.                 |
+| Criterion                      | What applies here                                                                                                                                                                                                                                             | How you can check it                                                                                                                      |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| **CC6.1** Logical access       | No accounts, no authentication, no authorization surface. There is nothing to gain access to.                                                                                                                                                                 | No auth code exists anywhere in the repository.                                                                                           |
+| **CC6.6** Boundary protection  | The browser refuses any cross-origin request from either page. The Word add-in sets `connect-src 'none'`; the web app sets `connect-src 'self'`, because in-browser OCR has to load a WebAssembly engine from this origin. Neither permits any external host. | View source; check the CSP `<meta>` tag. Enforced by the browser, not by us. A browser test asserts it on every build.                    |
+| **CC6.7** Transmission of data | No document data is transmitted. There is no endpoint to transmit to. The only requests the app makes are for its own code, from its own origin.                                                                                                              | Open your browser's network panel and check a document. CI does the same with request interception and fails if anything goes off-origin. |
+| **CC7.1** Detection of change  | Every release publishes SHA-256 checksums of every file, plus SHA-384 Subresource Integrity on every script, stylesheet and preloaded module. A tampered asset fails to execute rather than failing to be noticed.                                            | `curl -fsSLO <site>/checksums.sha256 && sha256sum -c checksums.sha256`                                                                    |
+| **CC7.2** Monitoring           | CI re-fetches the deployed site after every deploy and verifies it against its own published digests.                                                                                                                                                         | `.github/workflows/deploy.yml`, job `verify-published`.                                                                                   |
+| **CC8.1** Change management    | Every change is a public commit. Releases are tagged, and the version in the manifest is derived from the tag and re-verified against it during the release build.                                                                                            | Public git history; `.github/workflows/release.yml`.                                                                                      |
+| **A1.2** Availability          | Not applicable in the usual sense: a loaded page keeps working with no network at all. There is no service to be unavailable.                                                                                                                                 | Load the app, disconnect, keep working.                                                                                                   |
+| **C1.1** Confidentiality       | Confidential information is never received, so it is never stored, retained, or disposed of.                                                                                                                                                                  | The absence of any storage API in the source.                                                                                             |
+| **P** Privacy                  | No personal information is collected.                                                                                                                                                                                                                         | `privacy.html`, and the absence of analytics or telemetry in the bundle.                                                                  |
 
 ## Vendor questionnaire
 
@@ -88,7 +88,23 @@ The questions that actually get asked, answered.
 **Does the product transmit, store, or process our data outside our
 environment?**
 No. Processing happens in the browser on the reviewer's own machine. Nothing is
-transmitted or stored anywhere else.
+transmitted or stored anywhere else. That includes files opened from disk and
+scanned PDFs, which are read by an OCR engine that also runs in the page.
+
+**You mentioned OCR. Where does that run, and what does it send?**
+In the browser, and nothing. Optical character recognition for scanned PDFs
+uses a WebAssembly engine and an English language model, both published
+alongside the application and served from the same origin. The library ReCite
+uses would fetch its language models from a third-party CDN by default; that
+default is overridden, because otherwise opening a scan would tell a CDN that
+someone was doing so. This is verified rather than asserted: a test loads the
+built site in a real browser, intercepts every request, and fails if any of
+them leaves the origin.
+
+Note the accuracy caveat, which is a different question from the privacy one:
+OCR is a machine reading a picture, and it misreads characters. The characters
+it confuses are exactly the ones citations are made of. ReCite marks any
+document read this way and reports how many pages were recognised.
 
 **Where is data hosted, and in what jurisdiction?**
 No data is hosted. The _application files_ are served from GitHub Pages; your

@@ -94,6 +94,32 @@ jobs:
           name: coverage
           path: coverage/lcov.info
 
+  browser:
+    name: the built site in a real browser
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+
+      # The browser tests read `dist/`, so it has to exist — including the
+      # OCR language model, which `build:release` publishes.
+      - run: pnpm build:release
+
+      # Two things only a real browser can answer: that OCR actually turns a
+      # scanned page into readable citations, and that nothing the app does
+      # leaves the origin. The second matters because Scribe's CDN fallback is
+      # still a string in the bundle — the override has to be observed, not
+      # assumed.
+      - run: pnpm test:browser
+    env:
+      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright
+
   build:
     name: build and verify checksums
     runs-on: ubuntu-latest

@@ -6,14 +6,17 @@ citations are wrong, and corrects the ones it can correct safely.
 
 > ### Everything runs in your browser
 >
-> There is no ReCite server. No account, no upload, no database, no API. Your
-> document is read into memory in the page, checked, and gone when you close the
-> tab. It is never transmitted anywhere.
+> There is no ReCite server. No account, no upload, no database, no API. Open a
+> file or paste text and it is read into memory in the page, checked, and gone
+> when you close the tab. It is never transmitted anywhere. That includes
+> scanned PDFs, which are read by an OCR engine that also runs in the page.
 >
 > This is not only a promise — the page ships a Content Security Policy with
-> `connect-src 'none'`, so **the browser itself refuses to open a network
-> connection** from the app. Open your network panel and check a document: there
-> are no requests.
+> `connect-src 'self'`, so **the browser itself refuses any request to another
+> origin**. The Word add-in is stricter still (`connect-src 'none'`), because
+> Word hands it the document and it has nothing to load. A test loads the built
+> site in a real browser, intercepts every request, and fails if one leaves the
+> origin.
 >
 > Working with privileged material? See
 > [**docs/compliance.md**](docs/compliance.md) — written for a law firm's
@@ -83,6 +86,47 @@ Page ranges are read with any dash a document might contain — hyphen, en dash,
 em dash, figure dash, non-breaking hyphen — because losing the dash means
 losing the pin cite, and losing the pin cite means the page checks silently
 stop running.
+
+## Opening a document
+
+Drag a file in, or choose one. ReCite reads it in the page — there is no upload
+step, because there is nowhere to upload to.
+
+| Format                     | How it is read                                                                                    |
+| -------------------------- | ------------------------------------------------------------------------------------------------- |
+| `.txt` `.md` `.csv` `.log` | directly                                                                                          |
+| `.rtf`                     | a parser that keeps the characters citations need — section signs, en and em dashes, curly quotes |
+| `.docx`                    | the browser's own `DecompressionStream`, no ZIP library                                           |
+| `.odt`                     | the same, with ODF's different text model                                                         |
+| `.html` `.htm` `.xml`      | a tag scanner, script and style content dropped                                                   |
+| `.pdf` (with a text layer) | read directly — exact, no guessing                                                                |
+| `.pdf` (scanned)           | **OCR**, in the browser, via [Scribe.js](https://github.com/scribeocr/scribe.js)                  |
+
+Format is decided by content first and extension second, because a `.doc` that
+is really a `.docx` is common enough in a firm that trusting the name would
+produce mangled text — and mangled text in a citation checker means wrong
+findings rather than an obvious failure.
+
+Legacy binary `.doc` is **refused**, deliberately. Reading it reliably needs a
+real implementation of a format from 1997, and a half-working one returns
+plausible text with pieces missing, which is the worst possible outcome here.
+Save as `.docx`, `.rtf` or `.txt` instead.
+
+### Scanned PDFs
+
+Pages that already have a text layer are read directly; only pages without one
+are recognised. That is an accuracy decision as much as a speed one — OCRing a
+page that already has perfect text can only make it worse.
+
+**OCR is a machine reading a picture, and it misreads characters** — `1` for
+`l`, `0` for `O`, `5` for `S`. Those are exactly the characters citations are
+made of, so a volume or page recovered this way can be wrong while looking
+right. ReCite says so when it has used OCR, and reports how many pages.
+
+The engine and its English language model are published with the app and served
+from the same origin. Scribe's default is to pull models from a CDN; that is
+overridden, so opening a scan does not tell anyone else that you did. Nothing
+downloads until you actually open a PDF — the first-load bundle is unaffected.
 
 ## Fixing
 
@@ -177,7 +221,7 @@ supplies the authority list know nothing about each other.
 ```console
 $ pnpm install
 $ pnpm dev            # web app on :3000
-$ pnpm test           # 425 tests
+$ pnpm test           # 673 tests
 $ pnpm check          # lint + format + types + tests, what CI runs
 $ pnpm build:release  # build, generate manifest.xml, write checksums
 ```

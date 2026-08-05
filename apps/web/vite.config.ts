@@ -47,6 +47,11 @@ export default defineConfig(({ mode }) => ({
   },
   resolve: {
     alias: {
+      // Scribe's Node canvas, which the browser never uses but a bundler
+      // cannot tell is unreachable. See the stub for why.
+      "@scribe.js/canvas": fileURLToPath(
+        new URL("src/import/scribe-canvas-stub.ts", import.meta.url),
+      ),
       "@recite/core": fileURLToPath(
         new URL("../../packages/core/src/index.ts", import.meta.url),
       ),
@@ -57,6 +62,12 @@ export default defineConfig(({ mode }) => ({
         new URL("../../packages/engine/src/index.ts", import.meta.url),
       ),
     },
+  },
+  // Scribe's OCR workers are ES modules and use top-level `await`, which the
+  // default `iife` worker format cannot express. Scribe also constructs them
+  // with `{ type: "module" }`, so this is the format they were written for.
+  worker: {
+    format: "es",
   },
   build: {
     outDir: "dist",

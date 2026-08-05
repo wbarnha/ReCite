@@ -153,6 +153,25 @@ matters: the app has no server, so nothing should ever open a connection, and
 a bug or a compromised dependency cannot quietly post a client's document
 somewhere.
 
+`connect-src` differs between the two pages, and the web app's is the weaker
+of the two. It is `'self'` rather than `'none'` because reading a scanned PDF
+means running an OCR engine, and a WebAssembly engine has to be fetched before
+it can run. What survives the change is the part that matters: the browser
+still refuses **every cross-origin request**, so document text cannot leave the
+machine. The Word task pane keeps `connect-src 'none'`, because Word hands it
+the document and it has nothing to load.
+
+The OCR language model is published beside the application rather than fetched.
+Scribe's default is to pull `.traineddata` from jsDelivr, which would have put
+a third party in the path of a document check and told them that a request
+correlated with OCRing a document had come from that address. `opt.langPath`
+overrides it, and `tools/tessdata` publishes the model. The fallback URL is
+still a string in the bundle — it is the default in library code we do not
+control — so the override is verified rather than assumed: a test loads the
+built site in a real browser, intercepts every request, and fails if one leaves
+the origin. It caught this working the first time it ran, by showing the model
+being fetched from the local server.
+
 `script-src` differs between the two pages, on purpose. The task pane allows
 this origin and Microsoft's Office CDN, because Office requires `office.js` be
 loaded from there. **The web app allows only `'self'`** — it never loads
@@ -235,8 +254,23 @@ the point of enforcing them is that losing it becomes visible.
 
 ## Dependencies
 
-What reaches a browser: React and React DOM. That is the whole runtime
-dependency tree. The three published packages — `core`, `rules`, `engine` —
+What reaches a browser: React, React DOM, and — only if someone opens a PDF —
+Scribe.js for OCR. That is the whole runtime dependency tree.
+
+Scribe is the one substantial dependency in the project and it was taken on
+deliberately, for a capability that cannot be written from scratch: optical
+character recognition. Three things were done to bound it. It is **lazily
+loaded**, from a module nothing imports statically, so a visitor who never
+opens a PDF never downloads a byte of it — the first-load bundle is unchanged.
+Its **Node canvas implementation is aliased out** of the browser build, which
+removes a native binary that would otherwise have been shipped to every user.
+And its **CDN default is overridden**, as described above.
+
+Everything else the file import handles — `.docx`, `.odt`, `.rtf`, `.html` —
+is parsed with no dependency at all. The office formats are ZIP archives, and
+the browser has had an inflate built in for years (`DecompressionStream`);
+taking a ZIP library for that would have meant adding a dependency to the code
+path that reads a client's document. The three published packages — `core`, `rules`, `engine` —
 have none at all, which is why a rule cannot reach the network: nothing in its
 scope can.
 

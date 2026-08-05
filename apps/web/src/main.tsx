@@ -3,16 +3,24 @@
 import { StrictMode, useCallback, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 
+import { FileDrop } from "./components/FileDrop.js";
 import { Findings } from "./components/Findings.js";
 import { Footer } from "./components/Footer.js";
 import { ProfilePicker } from "./components/ProfilePicker.js";
 import { BrowserHost } from "./host.js";
+import type { ImportResult } from "./import/index.js";
 import { SAMPLE_CORPUS, SAMPLE_TEXT } from "./sample.js";
 import "./styles.css";
 import { useReCite } from "./useReCite.js";
 
 function WebApp() {
   const [draft, setDraft] = useState("");
+  // Kept so the status line can say what was opened and repeat any warning the
+  // reader raised — an OCR caveat in particular must stay visible after the
+  // import finishes, not flash past in a progress line.
+  const [imported, setImported] = useState<(ImportResult & { name: string }) | null>(
+    null,
+  );
   const editor = useRef<HTMLTextAreaElement>(null);
 
   // The textarea is the document. Reads come from the live DOM value so that
@@ -48,15 +56,35 @@ function WebApp() {
       </header>
 
       <div className="notice">
-        Nothing you paste leaves this page. Parsing, the rule set and the authority
-        check all run locally. There is no server — your browser is configured to refuse
-        network connections from this app.{" "}
-        <a href="./privacy.html">How this is enforced</a>
+        Nothing you open or paste leaves this page. Reading the file, the OCR for
+        scanned PDFs, the rule set and the authority check all run in your browser.
+        There is no server — your browser is configured to refuse any request this app
+        makes to another origin. <a href="./privacy.html">How this is enforced</a>
       </div>
 
       <div className="columns">
         <section>
           <h2>Document</h2>
+          <FileDrop
+            disabled={recite.busy}
+            onImported={(result, name) => {
+              setDraft(result.text);
+              setImported({ ...result, name });
+            }}
+          />
+          {imported && (
+            <div className="notice import-notice">
+              <p>
+                Opened <strong>{imported.name}</strong> — {imported.format},{" "}
+                {imported.text.length.toLocaleString("en-US")} characters.
+              </p>
+              {imported.warnings.map((warning) => (
+                <p key={warning} className="import-warning">
+                  {warning}
+                </p>
+              ))}
+            </div>
+          )}
           <textarea
             ref={editor}
             rows={26}
