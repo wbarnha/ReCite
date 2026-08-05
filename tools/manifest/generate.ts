@@ -65,7 +65,9 @@ export function renderManifest({ baseUrl, version }: ManifestOptions): string {
 
   <Id>${ADDIN_ID}</Id>
   <Version>${escapeXml(version)}</Version>
-  <ProviderName>ReCite contributors</ProviderName>
+  <!-- Must match the Partner Center account the listing is published under,
+       or AppSource rejects the submission. See docs/appsource.md. -->
+  <ProviderName>William Barnhart</ProviderName>
   <DefaultLocale>en-US</DefaultLocale>
   <DisplayName DefaultValue="ReCite" />
   <Description DefaultValue="Check case law citations in the open document: impossible reporter and year pairings, non-precedential authority, inconsistent abbreviations, and citations missing from your authority list. Runs locally; document text is not uploaded." />

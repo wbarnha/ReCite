@@ -44,10 +44,13 @@ Failing it means it will not be.
 
 1. **Enrol in Partner Center** as a developer. Individual or company; a company
    account needs verifiable business identity and takes longer.
-2. **Decide who the publisher is.** `<ProviderName>` currently reads "ReCite
-   contributors". If the listing is published under a firm or company name,
-   that name must match the Partner Center account, and the manifest should be
-   updated to match before submission.
+2. **Check the publisher name still matches.** `<ProviderName>` is
+   **William Barnhart**. AppSource rejects a submission whose provider name
+   does not match the Partner Center account, so if the listing is later
+   published under a company or firm account, change it in
+   `tools/manifest/generate.ts` first — the test in
+   `tools/test/appsource.test.ts` pins the current value, so it will not drift
+   silently.
 3. **Fill in the listing**: short and long description, search terms, category
    (Productivity / Legal), screenshots (1366×768), and a 300×300 listing logo.
    The logo is a Partner Center upload, separate from the manifest icons.

@@ -101,6 +101,12 @@ describe("listing rules", () => {
     expect(manifest()).toContain("icons/icon-128.png");
   });
 
+  it("names the publisher AppSource will check against the account", () => {
+    // A provider name that does not match the Partner Center account is a
+    // rejection, and it is the kind that is only discovered after the wait.
+    expect(manifest()).toContain("<ProviderName>William Barnhart</ProviderName>");
+  });
+
   it("asks only for the permission it needs", () => {
     expect(manifest()).toContain("<Permissions>ReadWriteDocument</Permissions>");
     expect(errors(manifest())).toEqual([]);
