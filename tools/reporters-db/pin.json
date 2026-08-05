@@ -1,0 +1,11 @@
+{
+  "$comment": "Which upstream revision the vendored reporter data came from. `ref` is a git tag, so it is immutable; `files` records a SHA-256 for each file fetched, so a tag that was moved or a file that was altered in transit fails the sync rather than silently changing what ReCite accuses people of. Update with `pnpm reporters:sync --ref <tag>`; never edit by hand.",
+  "source": "https://github.com/freelawproject/reporters-db",
+  "license": "BSD-2-Clause",
+  "copyright": "Copyright (c) 2014, Free Law Project",
+  "ref": "v3.2.66",
+  "syncedAt": "2026-08-05",
+  "files": {
+    "reporters_db/data/reporters.json": "2b20c0ff414a8003b1c164904e5f1db8ee2504a81ef49fba69c4413a83e3f10a"
+  }
+}

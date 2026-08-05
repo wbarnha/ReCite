@@ -2,50 +2,60 @@
 
 import { describe, expect, it } from "vitest";
 
-import {
-  buildPatterns,
-  flexibleAbbrev,
-  reporterAlternatives,
-} from "../src/patterns.js";
+import { buildPatterns, reporterAlternatives } from "../src/patterns.js";
+import { parse } from "../src/parse.js";
 
-describe("flexibleAbbrev", () => {
-  it("lets every space inside an abbreviation be optional", () => {
-    const re = new RegExp(`^${flexibleAbbrev("S. Ct.")}$`);
-    expect(re.test("S. Ct.")).toBe(true);
-    expect(re.test("S.Ct.")).toBe(true);
-    expect(re.test("S.  Ct.")).toBe(true);
+describe("reporter spacing", () => {
+  // `flexibleAbbrev` used to build a per-abbreviation pattern so that `S.Ct.`
+  // and `S. Ct.` both matched. Reporters are matched by shape now and identity
+  // is settled by `findReporter`, which squashes spacing — so the behaviour is
+  // asserted where it now lives, on the parse.
+  it.each([
+    ["119 S. Ct. 662 (1999).", "S. Ct."],
+    ["119 S.Ct. 662 (1999).", "S.Ct."],
+    ["20 L.Ed.2d 835 (1968).", "L.Ed.2d"],
+    ["905 F.Supp.2d 121 (2012).", "F.Supp.2d"],
+    ["1 F. App'x 2 (2001).", "F. App'x"],
+  ])("reads the reporter in %s however it is spaced", (text, written) => {
+    expect(parse(text).citations[0]?.reporter).toBe(written);
   });
 
-  it("handles a three-token reporter", () => {
-    const re = new RegExp(`^${flexibleAbbrev("F. Supp. 2d")}$`);
-    expect(re.test("F. Supp. 2d")).toBe(true);
-    expect(re.test("F.Supp.2d")).toBe(true);
-    expect(re.test("F. Supp.2d")).toBe(true);
-  });
-
-  it("accepts either apostrophe", () => {
-    const re = new RegExp(`^${flexibleAbbrev("F. App'x")}$`);
-    expect(re.test("F. App'x")).toBe(true);
-    expect(re.test("F. App’x")).toBe(true);
-  });
-
-  it("escapes the periods rather than treating them as wildcards", () => {
-    const re = new RegExp(`^${flexibleAbbrev("U.S.")}$`);
-    expect(re.test("U.S.")).toBe(true);
-    expect(re.test("U. S.")).toBe(true);
-    expect(re.test("UXSY")).toBe(false);
-  });
-
-  it("collapses redundant whitespace groups", () => {
-    expect(flexibleAbbrev("S. Ct.")).not.toMatch(/(?:\\s\*){2}/);
+  it("resolves every spacing to the same canonical reporter", () => {
+    for (const text of ["119 S. Ct. 662 (1999).", "119 S.Ct. 662 (1999)."]) {
+      expect(parse(text).citations[0]?.reporterCanonical).toBe("S. Ct.");
+    }
   });
 });
 
-describe("reporterAlternatives", () => {
-  it("lists longer abbreviations first so they win the alternation", () => {
+describe("reporter matching", () => {
+  it("prefers the longest reporter that still leaves a page number", () => {
+    // This used to be a property of the alternation, which listed longer
+    // abbreviations first so `F. Supp. 2d` beat `F. Supp.`. There is no
+    // alternation any more — the shape grows lazily until a bare page can
+    // follow — so the property is now asserted on the outcome, which is what
+    // mattered all along.
+    const [supp] = parse("905 F. Supp. 2d 121 (S.D.N.Y. 2012).").citations;
+    expect(supp?.reporter).toBe("F. Supp. 2d");
+
+    const [lawyers] = parse("20 L. Ed. 2d 835 (1968).").citations;
+    expect(lawyers?.reporter).toBe("L. Ed. 2d");
+  });
+
+  it("knows the reporters the vendored table carries", () => {
+    // Around 3,600 spellings, against the fifty this project maintained by
+    // hand. The count is not the point; that a state reporter nobody thought
+    // to type in is now recognised is.
     const all = reporterAlternatives();
-    expect(all.indexOf("F. Supp. 2d")).toBeLessThan(all.indexOf("F. Supp."));
-    expect(all.indexOf("L. Ed. 2d")).toBeLessThan(all.indexOf("L. Ed."));
+    expect(all.length).toBeGreaterThan(3000);
+    expect(all).toContain("F. Supp. 2d");
+    expect(all).toContain("Cal. Rptr. 3d");
+  });
+
+  it("refuses text that has the shape of a citation but names no reporter", () => {
+    // The cost of matching a shape rather than a list. `123 Main Street 45`
+    // fits the pattern exactly and must not be reported as a citation.
+    expect(parse("123 Main Street 45").citations).toHaveLength(0);
+    expect(parse("See 42 Wallaby Way 12 for details.").citations).toHaveLength(0);
   });
 
   it("contains no duplicates", () => {

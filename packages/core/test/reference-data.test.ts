@@ -69,7 +69,12 @@ describe("coverage", () => {
     [1992, false],
     [1993, true],
     [2019, true],
-    [2022, false],
+    // Upstream leaves F.3d open-ended, and this project used to close it in
+    // 2021 when F.4th began. Deferring to `reporters-db` was the point of
+    // vendoring it, and the disagreement resolves in the safe direction: an
+    // open range accuses nobody, whereas a wrong end year reports a real
+    // citation as impossible.
+    [2022, true],
   ])("F.3d covers %i: %s", (year, covered) => {
     expect(reporterCovers(findReporter("F.3d")!, year)).toBe(covered);
   });

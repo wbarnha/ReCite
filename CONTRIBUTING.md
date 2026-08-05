@@ -56,18 +56,38 @@ format that broke rather than a line number.
 
 Watch two things in particular:
 
-- **Alternation order.** Longer abbreviations must come first, or `F. Supp. 2d`
-  parses as `F. Supp.` and loses its series.
+- **Shape, not names.** Reporters are matched by what an abbreviation looks
+  like and identified afterwards by a hash lookup — there is no alternation of
+  known abbreviations any more, and there cannot be: the vendored table has
+  3,600 spellings in it. A pattern that over-matches is fine, because the
+  lookup discards what is not a reporter; one that under-matches loses the
+  citation silently.
+- **Longest wins, by construction.** `905 F. Supp. 2d 121` must parse as
+  `F. Supp. 2d`, not `F. Supp.`. The shape grows lazily until a bare page
+  number can follow, which gets there without anyone ordering a list.
 - **Scan order.** Statutes are matched before reporters, because
   `11 U.S.C. § 362` starts out looking like a `U.S.` citation.
 
 ## Reference data
 
-`packages/core/src/data/` holds the reporter and court tables. Additions are
-welcome; each entry needs the abbreviation, the full name and the years, and
-those years are load-bearing — `DT001` and `CT003` are only as good as they
-are. A wrong end year produces confident false accusations, which is worse than
-no rule at all.
+**Reporters are vendored from
+[`reporters-db`](https://github.com/freelawproject/reporters-db)** and must not
+be edited here. `packages/core/src/data/upstream.generated.ts` is generated;
+a fix to a reporter's name or dates belongs upstream, where everyone benefits.
+Run `pnpm reporters:sync` to regenerate, and see
+[docs/reporters-db.md](docs/reporters-db.md).
+
+Two things about reporters _are_ local, in `packages/core/src/data/overlay.ts`:
+which reporters publish only the Supreme Court, and which carry
+non-precedential dispositions. Neither is something a catalogue records, and
+both drive rules. Add to those lists using the **canonical** abbreviation —
+an annotation naming a variation applies to nothing, and `overlay.test.ts`
+fails when one does.
+
+The court table in `packages/core/src/data/courts.ts` is still maintained here.
+Each entry needs the abbreviation, the full name and the years, and those years
+are load-bearing — `CT003` is only as good as they are. A wrong end year
+produces confident false accusations, which is worse than no rule at all.
 
 ## Versioning
 

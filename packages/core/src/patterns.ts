@@ -3,54 +3,52 @@
  *
  * They are exported separately from the parser so they can be tested — and
  * read — on their own. Every pattern here is built to tolerate the way real
- * filings are typed and the way PDF extraction mangles them: optional spacing
- * inside abbreviations (`S.Ct.` and `S. Ct.`), and line breaks in the middle
- * of a citation.
+ * filings are typed and the way PDF extraction mangles them.
+ *
+ * Reporters are matched by *shape* rather than by name — see
+ * {@link REPORTER_SHAPE}. That is why there is no longer a `flexibleAbbrev`
+ * turning `"S. Ct."` into `S\.\s*Ct\.`: spacing is handled where identity is
+ * settled, by `findReporter`, which squashes punctuation and whitespace before
+ * looking anything up. One place, for every reporter, instead of a generated
+ * pattern per abbreviation.
  */
 
 import { DASH_CLASS } from "./bluebook.js";
 import { REPORTERS, REPORTER_VARIATIONS } from "./data/reporters.js";
 
-/**
- * Turn an abbreviation into a pattern that matches however it was spaced.
- *
- * `"S. Ct."` becomes `S\.\s*Ct\.\s*`, which matches `S. Ct.`, `S.Ct.` and
- * `S.  Ct.` alike. This is the single most important behaviour in the file:
- * the *Mata v. Avianca* filing spells the Supreme Court Reporter both ways,
- * sometimes in the same paragraph, and a parser that only accepts one of them
- * silently loses half the citations.
- */
-export function flexibleAbbrev(abbrev: string): string {
-  let out = "";
-  for (const ch of abbrev) {
-    if (/\s/.test(ch)) {
-      out += "\\s*";
-      continue;
-    }
-    if (ch === "'" || ch === "’") {
-      out += "['’]";
-      continue;
-    }
-    out += ch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    if (ch === ".") out += "\\s*";
-  }
-  // Collapse runs of `\s*`; they are equivalent and the shorter form avoids
-  // needless backtracking on long whitespace.
-  return out.replace(/(?:\\s\*)+/g, "\\s*").replace(/\\s\*$/, "");
-}
-
 /** Every abbreviation the parser will recognise, canonical and variant. */
 export function reporterAlternatives(): string[] {
   const all = [...REPORTERS.map((r) => r.abbrev), ...Object.keys(REPORTER_VARIATIONS)];
-  // Longest first, so `F. Supp. 2d` wins over `F. Supp.` and `L. Ed. 2d` over
-  // `L. Ed.`. Without this the parser would truncate the longer series.
-  return [...new Set(all)].sort((a, b) => b.length - a.length);
+  return [...new Set(all)];
 }
 
-/** The reporter alternation, as an un-anchored pattern fragment. */
-export function reporterAlternation(): string {
-  return reporterAlternatives().map(flexibleAbbrev).join("|");
-}
+/**
+ * What a reporter abbreviation looks like, rather than which ones exist.
+ *
+ * The parser used to hold an alternation of every known abbreviation. That was
+ * workable at fifty and is not at three and a half thousand: vendoring
+ * `reporters-db` turned it into a 67,000-character regular expression, and the
+ * measured effect was exactly what that sounds like — the ReDoS suite caught
+ * two patterns going superlinear the moment the data landed.
+ *
+ * So the shape is matched here and the *identity* is settled afterwards, by
+ * looking the captured token up in a hash map. That is faster, it scales to
+ * however many reporters upstream adds next, and it is strictly more capable:
+ * `findReporter` already ignores spacing, so `S.Ct.` and `S. Ct.` resolve the
+ * same way without the pattern having to know both spellings.
+ *
+ * Over-matching is the accepted cost and is safe by construction — `123 Main
+ * Street 45` matches this shape and is discarded when the lookup fails. See
+ * `parse.ts`, which does the discarding.
+ *
+ * Structure: an initial capitalised token, then up to four more separated by
+ * spaces, lazily — so `905 F. Supp. 2d 121` grows the reporter until a bare
+ * page number can follow, landing on `F. Supp. 2d` rather than stopping at
+ * `F.`. Each component ends on a non-space character, so the group cannot
+ * compete with the whitespace that follows it.
+ */
+const REPORTER_CHAR = String.raw`[A-Za-z0-9.'’&()\-]`;
+export const REPORTER_SHAPE = String.raw`[A-Z]${REPORTER_CHAR}*(?:[ \t]${REPORTER_CHAR}+){0,4}?`;
 
 /** States that issue court-assigned (public domain) citations. */
 const NEUTRAL_JURISDICTIONS = [
@@ -104,7 +102,7 @@ const PIN_BODY = String.raw`(?:${PAGE_OR_RANGE}(?:\s*,\s*${PAGE_OR_RANGE})*|pass
  * sharing one across concurrent parses would make matches disappear.
  */
 export function buildPatterns() {
-  const reporter = reporterAlternation();
+  const reporter = REPORTER_SHAPE;
 
   return {
     /** `925 F.3d 1339`, `905 F. Supp. 2d 121`, `20 L.Ed.2d 835` */

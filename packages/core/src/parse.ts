@@ -216,6 +216,12 @@ function collectMatches(
         groups: { ...(match.groups ?? {}) },
       };
 
+      // The reporter patterns match a *shape*, not a list of names — see
+      // `REPORTER_SHAPE`. Identity is settled here, and anything the table
+      // does not recognise is discarded. Without this, `123 Main Street 45`
+      // would be reported as a citation.
+      if (!isRecognisedReporter(candidate)) continue;
+
       if (!found.some((existing) => overlaps(existing, candidate))) {
         found.push(candidate);
       }
@@ -227,6 +233,27 @@ function collectMatches(
 
 function overlaps(a: RawMatch, b: RawMatch): boolean {
   return a.start < b.end && b.start < a.end;
+}
+
+/**
+ * Whether a shape match names a reporter that exists.
+ *
+ * Both spellings count: the canonical abbreviation, and any of the misspellings
+ * upstream records — those are the ones `RP001` exists to correct, so dropping
+ * them here would mean never reporting them.
+ *
+ * Kinds that do not carry a reporter pass through untouched.
+ */
+function isRecognisedReporter(candidate: RawMatch): boolean {
+  if (candidate.kind !== "case-reporter" && candidate.kind !== "short-form")
+    return true;
+
+  const written = candidate.groups.reporter?.trim();
+  if (!written) return false;
+
+  return (
+    findReporter(written) !== undefined || canonicalForVariation(written) !== undefined
+  );
 }
 
 // ---------------------------------------------------------------- assembly --

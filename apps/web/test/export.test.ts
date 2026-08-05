@@ -54,6 +54,7 @@ const CONTEXT: ReportContext = {
   ],
   version: "1.0.0.0",
   commit: "abc123def456",
+  reporterData: "v3.2.66",
 };
 
 const blobText = (blob: Blob) => blob.text();
@@ -307,6 +308,8 @@ describe("findings reports", () => {
       tool: "ReCite",
       citations: 4,
       commit: "abc123def456",
+      // A date-range finding is only as good as the table behind it.
+      reporterData: "v3.2.66",
     });
   });
 

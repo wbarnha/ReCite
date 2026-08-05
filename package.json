@@ -19,6 +19,8 @@
     "manifest:validate": "tsx tools/manifest/validate.ts",
     "pages": "tsx tools/pages/generate.ts",
     "tessdata": "tsx tools/tessdata/generate.ts",
+    "reporters:sync": "tsx tools/reporters-db/sync.ts",
+    "reporters:check": "tsx tools/reporters-db/check.ts",
     "checksums": "tsx tools/integrity/generate.ts",
     "verify:checksums": "tsx tools/integrity/verify.ts",
     "dev": "pnpm --filter @recite/web dev",

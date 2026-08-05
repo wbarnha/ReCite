@@ -263,6 +263,7 @@ packages/
 apps/
 └── web/      the web app and the Word task pane, from one build
 tools/
+├── reporters-db/ pins, fetches and transforms the upstream reporter table
 ├── version/   works out the release version from the git tag
 ├── pages/     generates the walkthrough, privacy, terms and support pages
 ├── tessdata/  publishes the OCR language model alongside the app
@@ -281,7 +282,7 @@ supplies the authority list know nothing about each other.
 ```console
 $ pnpm install
 $ pnpm dev            # web app on :3000
-$ pnpm test           # 728 tests
+$ pnpm test           # 768 tests
 $ pnpm check          # lint + format + types + tests, what CI runs
 $ pnpm build:release  # build, generate manifest.xml, write checksums
 ```
@@ -304,10 +305,29 @@ That means `pnpm typecheck` covers them too, which it previously did not.
 
 ## Reference data
 
-The reporter and court tables in `packages/core/src/data/` list abbreviations,
-full names and the years each reporter series and court has been in operation,
-compiled from public sources. The parser fixtures are transcribed from a public
-court filing; see [docs/testing.md](docs/testing.md).
+**Reporters come from [`reporters-db`](https://github.com/freelawproject/reporters-db)**,
+maintained by the Free Law Project — 1,342 editions and 2,250 recognised
+misspellings, against the 51 this project once maintained by hand.
+
+It is **vendored, not fetched**: generated from a pinned upstream tag and
+committed, so a build produces the same table whatever upstream is doing today.
+That matters more here than in most projects. Reporter date ranges are what
+decides that `999 F.3d 1 (1950)` is impossible, so a table that changed under a
+deploy would change what ReCite tells a lawyer about their brief with no change
+in this repository.
+
+```console
+$ pnpm reporters:check                # is upstream ahead of the pin?
+$ pnpm reporters:sync --ref v3.2.70   # move it, and read the diff
+```
+
+Nothing updates automatically, and a weekly workflow reports a new release
+rather than taking it. See [docs/reporters-db.md](docs/reporters-db.md) for the
+architecture, what the transform decides and why, and what absorbing the data
+cost.
+
+The court table is still local. The parser fixtures are transcribed from a
+public court filing; see [docs/testing.md](docs/testing.md).
 
 ## Caveats
 
@@ -322,3 +342,8 @@ court filing; see [docs/testing.md](docs/testing.md).
 ## Licence
 
 BSD 2-Clause. See [LICENSE](LICENSE).
+
+Reporter data from [`reporters-db`](https://github.com/freelawproject/reporters-db),
+BSD 2-Clause, Copyright (c) 2014, Free Law Project. The Free Law Project
+maintains it as a public good, and ReCite would be substantially worse without
+it.

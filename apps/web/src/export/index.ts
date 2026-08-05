@@ -114,6 +114,14 @@ export interface ReportContext {
   /** Build identity, so a report can be tied to the version that produced it. */
   readonly version: string;
   readonly commit: string;
+  /**
+   * Which revision of the reporter table the findings were made against.
+   *
+   * A date-range finding is only as good as the data behind it, and that data
+   * comes from a specific upstream release. Recording it means a report can be
+   * re-examined later against the same table rather than whatever is current.
+   */
+  readonly reporterData: string;
 }
 
 // ------------------------------------------------------------- documents ---
@@ -193,6 +201,7 @@ function reportJson(context: ReportContext): string {
       tool: "ReCite",
       version: context.version,
       commit: context.commit,
+      reporterData: context.reporterData,
       document: context.documentName,
       bluebook: context.profile,
       citations: context.citationCount,
@@ -233,6 +242,7 @@ function reportMarkdown(context: ReportContext): string {
     `- **Citations found:** ${context.citationCount}`,
     `- **Findings:** ${context.findings.length}`,
     `- **ReCite:** ${context.version} (commit ${context.commit})`,
+    `- **Reporter data:** freelawproject/reporters-db ${context.reporterData}`,
     "",
   ];
 

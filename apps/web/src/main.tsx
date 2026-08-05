@@ -14,7 +14,7 @@ import type { ImportResult } from "./import/index.js";
 import type { ReportContext } from "./export/index.js";
 import { SAMPLE_CORPUS, SAMPLE_TEXT } from "./sample.js";
 import "./styles.css";
-import { describeProfile } from "@recite/core";
+import { describeProfile, UPSTREAM_REVISION } from "@recite/core";
 
 import { useReCite } from "./useReCite.js";
 
@@ -79,6 +79,7 @@ function WebApp() {
       })),
       version: BUILD_INFO.version,
       commit: SHORT_COMMIT,
+      reporterData: UPSTREAM_REVISION,
     }),
     [imported, recite.profile, recite.result],
   );

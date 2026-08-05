@@ -1,0 +1,38 @@
+name: reporters-db
+
+# Watches Free Law Project's reporters-db for a release newer than the one
+# pinned in `tools/reporters-db/pin.json`, and confirms the pinned revision has
+# not moved underneath us.
+#
+# It never syncs. Reporter date ranges decide which citations `DT001` calls
+# impossible, so pulling upstream automatically would change what ReCite
+# accuses people of without anyone reading the diff. Updating is a person
+# running `pnpm reporters:sync --ref <tag>` and reviewing what changed. This
+# job exists so nobody has to remember to check.
+on:
+  schedule:
+    # Weekly. Upstream releases a few times a year; daily would be noise.
+    - cron: "0 7 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: is upstream ahead of the pin?
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      # Fails only if the *pinned* revision changed — a moved tag or an altered
+      # file, which is a supply-chain question rather than a stale-data one. A
+      # merely newer release is a notice.
+      - name: Check the pin
+        run: pnpm reporters:check >> "$GITHUB_STEP_SUMMARY"

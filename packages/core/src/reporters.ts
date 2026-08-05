@@ -5,6 +5,9 @@ import { REPORTERS, REPORTER_VARIATIONS } from "./data/reporters.js";
 
 export type { ReporterEdition } from "./data/reporters.js";
 export { REPORTERS, REPORTER_VARIATIONS } from "./data/reporters.js";
+// Provenance, so a caller can say which revision of the reporter table a
+// finding came from — the findings report does exactly that.
+export { UPSTREAM_REVISION, UPSTREAM_SOURCE } from "./data/reporters.js";
 
 /**
  * Reduce an abbreviation to its identifying characters.
