@@ -31,13 +31,54 @@ jobs:
       - run: pnpm format:check
       - run: pnpm typecheck
 
+  supply-chain:
+    name: dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      # What reaches a user's browser. The three packages have no runtime
+      # dependencies at all, so this covers React and React DOM and nothing
+      # else. Any advisory here is a vulnerability in the shipped product.
+      - name: Audit what ships
+        run: pnpm audit --prod --audit-level low
+
+      # Build and test tooling. It never reaches a user, but it does run on
+      # maintainer machines and on this runner with access to the token, so a
+      # compromise here is a supply-chain compromise of the release.
+      - name: Audit the toolchain
+        run: pnpm audit --audit-level moderate
+
+      # A dependency added without the lockfile being updated, or a lockfile
+      # edited by hand, would otherwise be installed silently.
+      - name: The lockfile matches the manifests
+        run: pnpm install --frozen-lockfile --lockfile-only
+
+      - name: Report what actually ships
+        run: |
+          {
+            echo "### Runtime dependency tree"
+            echo ""
+            echo '```'
+            pnpm --filter @recite/web list --prod --depth 2 || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
   test:
     name: tests (node ${{ matrix.node }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        node: [20, 22]
+        # Node 20 reached end of life in April 2026 and stopped receiving
+        # security patches, so it is no longer a version to certify against.
+        node: [22, 24]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

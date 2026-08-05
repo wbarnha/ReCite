@@ -69,8 +69,11 @@ export default tseslint.config(
     languageOptions: {
       parserOptions: {
         projectService: {
-          // Build-tool config sits outside the projects it configures.
-          allowDefaultProject: ["vitest.config.ts", "apps/web/vite.config.ts"],
+          // The root Vitest config configures every package and belongs to
+          // none of them. `apps/web/vite.config.ts` has a real project — see
+          // `apps/web/tsconfig.node.json` — because Vite's own types do not
+          // resolve under the default one.
+          allowDefaultProject: ["vitest.config.ts"],
         },
         tsconfigRootDir: import.meta.dirname,
       },

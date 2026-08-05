@@ -1,0 +1,13 @@
+{
+  // `vite.config.ts` runs in Node, not the browser, and is not part of the
+  // app it configures. It needs its own project so that type-aware linting
+  // and `tsc --build` can both see it — without one, Vite's own types do not
+  // resolve and the linter reports every call into them as unsafe.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "noEmit": true
+  },
+  "include": ["vite.config.ts"],
+  "references": [{ "path": "../../tools" }]
+}

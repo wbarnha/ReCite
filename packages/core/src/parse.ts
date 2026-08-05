@@ -13,6 +13,7 @@
  */
 
 import { resolveCourt, splitParenthetical } from "./courts.js";
+import { assertWithinLimits } from "./limits.js";
 import type { CitationKind, Extraction, ParsedCitation, Span } from "./model.js";
 import { isShortForm, lookupKey, span } from "./model.js";
 import { buildPatterns } from "./patterns.js";
@@ -167,6 +168,10 @@ export interface ParseOptions {
 
 /** Find every citation in `text`. */
 export function parse(text: string, options: ParseOptions = {}): Extraction {
+  // Before any pattern touches it. See `limits.ts`: the ceiling exists so that
+  // an oversized document is refused rather than partly checked.
+  assertWithinLimits(text);
+
   if (!text.trim()) {
     return { text, citations: [], resources: new Map() };
   }

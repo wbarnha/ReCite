@@ -7,7 +7,7 @@
   "type": "module",
   "packageManager": "pnpm@10.33.0",
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "scripts": {
     "build": "pnpm -r --filter \"./packages/*\" build && pnpm --filter @recite/web build",
@@ -33,7 +33,7 @@
   "devDependencies": {
     "@eslint/js": "^9.15.0",
     "@types/node": "^22.9.0",
-    "@vitest/coverage-v8": "^2.1.5",
+    "@vitest/coverage-v8": "^4.1.10",
     "@vitest/eslint-plugin": "^1.6.26",
     "eslint": "^9.15.0",
     "eslint-plugin-jsx-a11y": "^6.10.2",
@@ -44,6 +44,6 @@
     "tsx": "^4.19.2",
     "typescript": "^5.6.3",
     "typescript-eslint": "^8.15.0",
-    "vitest": "^2.1.5"
+    "vitest": "^4.1.10"
   }
 }
