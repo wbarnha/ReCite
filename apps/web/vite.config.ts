@@ -1,13 +1,15 @@
 import { execSync } from "node:child_process";
-import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
-const versionFile = JSON.parse(
-  readFileSync(new URL("../../version.json", import.meta.url), "utf8"),
-) as { product: string; semver: string };
+import { resolveVersion } from "../../tools/version/resolve.js";
+
+// The four-part form, so the string the UI shows is the same one the Office
+// manifest and `integrity.json` carry. On a tagged release this comes from the
+// tag; otherwise from the baseline in `version.json`.
+const release = resolveVersion();
 
 /** The commit the bundle was built from, so a published page can be traced. */
 function commit(): string {
@@ -33,7 +35,7 @@ export default defineConfig(({ mode }) => ({
   base: process.env.RECITE_BASE ?? (mode === "production" ? "/ReCite/" : "/"),
   plugins: [react()],
   define: {
-    __RECITE_VERSION__: JSON.stringify(versionFile.product),
+    __RECITE_VERSION__: JSON.stringify(release.product),
     __RECITE_COMMIT__: JSON.stringify(commit()),
     // Fixed at build time rather than read at runtime, so the string in the
     // bundle is exactly what the checksum in `integrity.json` covers.

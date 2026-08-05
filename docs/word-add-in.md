@@ -53,10 +53,29 @@ Two consequences worth knowing:
 
 ## Versioning
 
-Office add-in manifests require a four-part version, which is why
-[`version.json`](../version.json) carries both `1.0.0.0` (the product version,
-in the manifest and the UI) and `1.0.0` (the semver form npm accepts). Both are
-generated from that one file; neither should be edited by hand.
+Office add-in manifests require exactly four numeric components, and it is not
+semver: no prerelease suffix, and each component must be a whole number no
+greater than 65535.
+
+The version comes from the published GitHub release tag. `v1.2.3` becomes
+`<Version>1.2.3.0</Version>` — the tag's three numbers, then a zero. **The
+fourth component is always zero.** Office would let it be a build counter, but
+a number that moved independently of the tag could disagree with the release
+it shipped in, and this is the version Microsoft sees when the add-in is
+submitted.
+
+Nothing is edited by hand: `tools/version/resolve.ts` reads the tag, and the
+release workflow checks the generated manifest against it before attaching
+anything. `pnpm version:show` prints what the current build would be, and
+`RECITE_VERSION=v1.2.3 pnpm version:show` rehearses a release.
+
+An untagged build — local, a branch, a pull request — falls back to the
+baseline in [`version.json`](../version.json).
+
+Word keys upgrades on `<Version>`, so a prerelease tag is a trap worth
+knowing about: `v1.2.3-rc.1` and `v1.2.3-rc.2` are both `1.2.3.0`, and Word
+will not treat the second as newer. The build prints a warning when a tag
+carries a prerelease suffix.
 
 Word caches manifests aggressively. After a version bump, remove and re-upload
 the add-in if the pane does not change.

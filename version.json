@@ -1,5 +1,4 @@
 {
-  "$comment": "Single source of truth for the release version. `product` is the four-part form Office add-in manifests require and is what the UI displays; `semver` is the three-part form npm accepts. tools/manifest and tools/integrity both read this file — do not edit versions in package.json or manifest.xml by hand.",
-  "product": "1.0.0.0",
-  "semver": "1.0.0"
+  "$comment": "Baseline version for untagged builds — local development, branches, pull requests. A tagged GitHub release overrides this: tools/version/resolve.ts reads the tag and derives both the npm version (1.2.3) and the four-part Office manifest version (1.2.3.0, last component always zero). Bump this when starting work on the next version; the release itself comes from the tag. Do not edit versions in package.json or manifest.xml by hand.",
+  "version": "1.0.0"
 }

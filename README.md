@@ -6,11 +6,11 @@ citations are wrong, and corrects the ones it can correct safely.
 
 Everything runs locally. There is no server, and no document text is uploaded.
 
-|                      |                                                 |
-| -------------------- | ----------------------------------------------- |
-| Web app              | <https://wbarnha.github.io/ReCite/>             |
-| Word add-in manifest | <https://wbarnha.github.io/ReCite/manifest.xml> |
-| Version              | `1.0.0.0`                                       |
+|                      |                                                      |
+| -------------------- | ---------------------------------------------------- |
+| Web app              | <https://wbarnha.github.io/ReCite/>                  |
+| Word add-in manifest | <https://wbarnha.github.io/ReCite/manifest.xml>      |
+| Version              | set by the release tag — see [Releasing](#releasing) |
 
 ## Why
 
@@ -105,6 +105,34 @@ $ sha256sum -c checksums.sha256
 CI re-fetches the live site after each deploy and checks it against its own
 digests. See [docs/security.md](docs/security.md).
 
+## Releasing
+
+Publish a GitHub release tagged `vMAJOR.MINOR.PATCH`. The tag is the version;
+nothing is edited by hand.
+
+| Artefact                    | From `v1.2.3` |
+| --------------------------- | ------------- |
+| npm packages                | `1.2.3`       |
+| Word add-in `<Version>`     | `1.2.3.0`     |
+| `integrity.json`, UI footer | `1.2.3.0`     |
+
+Office requires four numeric components and does not accept semver, so the
+manifest gets the tag's three numbers followed by a zero. **The fourth
+component is always zero** — see [CONTRIBUTING.md](CONTRIBUTING.md#versioning)
+for why, and for what happens to a prerelease tag.
+
+Publishing the release builds the site, redeploys Pages so the served
+`manifest.xml` carries the new version, and attaches the manifest, the
+checksums and the packed npm tarballs to the release. The workflow re-reads
+`<Version>` out of the generated manifest and fails if it disagrees with the
+tag. A tag it cannot parse fails the release rather than falling back to the
+baseline in [`version.json`](version.json).
+
+```console
+$ pnpm version:show                        # what would this build be?
+$ RECITE_VERSION=v1.2.3 pnpm version:show  # rehearse a release
+```
+
 ## Layout
 
 A pnpm workspace. Each package is plain TypeScript with no runtime
@@ -118,6 +146,7 @@ packages/
 apps/
 └── web/      the web app and the Word task pane, from one build
 tools/
+├── version/   works out the release version from the git tag
 ├── manifest/  generates manifest.xml for wherever it is deployed
 ├── integrity/ SHA-256 checksums, SRI injection, verification
 └── icons/     draws the add-in icons at build time
@@ -133,7 +162,7 @@ supplies the authority list know nothing about each other.
 ```console
 $ pnpm install
 $ pnpm dev            # web app on :3000
-$ pnpm test           # 385 tests
+$ pnpm test           # 425 tests
 $ pnpm check          # lint + format + types + tests, what CI runs
 $ pnpm build:release  # build, generate manifest.xml, write checksums
 ```

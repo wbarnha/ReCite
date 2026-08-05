@@ -1,0 +1,171 @@
+name: Release
+
+# Publishing a GitHub release is what sets the version. The tag is the input:
+# `v1.2.3` becomes `1.2.3` for npm and `1.2.3.0` for the Office manifest.
+# Nothing here edits a version by hand, and nothing commits back — the tag is
+# the record of what was released.
+on:
+  release:
+    types: [published]
+  # For rehearsing a release without publishing one. Produces the same
+  # artefacts and attaches nothing.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Version tag to build as, e.g. v1.2.3"
+        required: true
+        type: string
+
+concurrency:
+  group: release-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  version:
+    name: resolve the version
+    runs-on: ubuntu-latest
+    outputs:
+      semver: ${{ steps.resolve.outputs.semver }}
+      product: ${{ steps.resolve.outputs.product }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      # Fails the release before anything is built if the tag is not a version
+      # we can express. Shipping the baseline version under a tag named
+      # something else is how a release ends up claiming to be a version it is
+      # not.
+      - name: Resolve
+        id: resolve
+        env:
+          RECITE_VERSION: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          set -euo pipefail
+          pnpm version:show | tee resolved.txt
+          {
+            echo "semver=$(awk '/^semver:/  {print $2}' resolved.txt)"
+            echo "product=$(awk '/^product:/ {print $2}' resolved.txt)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Summarise
+        run: |
+          {
+            echo "### Release ${{ steps.resolve.outputs.semver }}"
+            echo ""
+            echo "| Artefact | Version |"
+            echo "| --- | --- |"
+            echo "| npm packages | \`${{ steps.resolve.outputs.semver }}\` |"
+            echo "| Word add-in manifest | \`${{ steps.resolve.outputs.product }}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  verify:
+    name: lint, types, format, tests
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # A tag can point at any commit, including one that never went through
+      # CI. Re-run everything rather than assume.
+      - run: pnpm check
+
+  artifacts:
+    name: build and attach release artefacts
+    needs: [version, verify]
+    runs-on: ubuntu-latest
+    permissions:
+      # Only to attach files to the release that triggered this run.
+      contents: write
+    env:
+      RECITE_VERSION: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      # Writes the resolved version into every package.json so the packed
+      # tarballs carry it. Not committed: see tools/version/apply.ts.
+      - name: Stamp the version into every package.json
+        run: pnpm version:apply
+
+      - name: Confirm nothing is left unstamped
+        run: pnpm version:check
+
+      # The manifest points at the Pages deployment, which is where Word will
+      # load the add-in from.
+      - name: Build
+        env:
+          RECITE_BASE: /${{ github.event.repository.name }}/
+          RECITE_BASE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
+        run: pnpm build:release
+
+      - run: pnpm verify:checksums
+
+      - name: The manifest carries the tagged version
+        run: |
+          set -euo pipefail
+          expected='${{ needs.version.outputs.product }}'
+          actual=$(python3 -c "
+          import xml.etree.ElementTree as ET
+          ns = {'o': 'http://schemas.microsoft.com/office/appforoffice/1.1'}
+          root = ET.parse('apps/web/dist/manifest.xml').getroot()
+          print(root.find('o:Version', ns).text)
+          ")
+          echo "manifest <Version> = $actual"
+          if [ "$actual" != "$expected" ]; then
+            echo "::error::manifest says $actual, the tag says $expected"
+            exit 1
+          fi
+          case "$actual" in
+            *.0) ;;
+            *) echo "::error::manifest version must end in .0, got $actual"; exit 1 ;;
+          esac
+
+      - name: Pack the npm tarballs
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          for pkg in core rules engine; do
+            # `pnpm pack` resolves `workspace:*` dependencies to the version
+            # just stamped, so the tarballs are installable outside the repo.
+            pnpm --filter "@recite/$pkg" pack --pack-destination "$PWD/release"
+          done
+          ls -l release
+
+      - name: Collect the add-in artefacts
+        run: |
+          set -euo pipefail
+          cp apps/web/dist/manifest.xml release/
+          cp apps/web/dist/checksums.sha256 release/
+          cp apps/web/dist/integrity.json release/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ needs.version.outputs.semver }}
+          path: release/
+
+      # Attaching the manifest to the release matters most: it is the file a
+      # Word user uploads, and the checksums are what they verify it against.
+      - name: Attach to the release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "$TAG" release/* --clobber --repo "$GITHUB_REPOSITORY"

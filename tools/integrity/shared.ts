@@ -5,6 +5,8 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { resolveVersion } from "../version/resolve.js";
+
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const ROOT = join(HERE, "..", "..");
 export const DIST = join(ROOT, "apps", "web", "dist");
@@ -88,9 +90,7 @@ export function parseChecksumFile(contents: string): Record<string, string> {
   return files;
 }
 
+/** The four-part product version this build is stamped with. */
 export function readVersion(): string {
-  const raw = JSON.parse(readFileSync(join(ROOT, "version.json"), "utf8")) as {
-    product: string;
-  };
-  return raw.product;
+  return resolveVersion().product;
 }

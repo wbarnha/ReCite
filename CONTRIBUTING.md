@@ -71,11 +71,44 @@ no rule at all.
 
 ## Versioning
 
-[`version.json`](version.json) is the single source of truth. `product`
-(`1.0.0.0`) is the four-part form Office add-in manifests require and what the
-UI shows; `semver` (`1.0.0`) is what npm accepts. The manifest and the build
-metadata are generated from it — do not edit versions in `package.json` or in
-`manifest.xml` by hand.
+**A published GitHub release sets the version.** Tag `v1.2.3`, publish the
+release, and the workflows derive everything from the tag:
+
+| Artefact                    | Form      | From `v1.2.3` |
+| --------------------------- | --------- | ------------- |
+| npm packages                | semver    | `1.2.3`       |
+| Word add-in `<Version>`     | four-part | `1.2.3.0`     |
+| `integrity.json`, UI footer | four-part | `1.2.3.0`     |
+
+The fourth component of the Office version is **always zero**. Office would
+allow a build counter there, but nothing in this project has a number to put
+in it, and a component that moved independently of the tag would be one more
+thing that could disagree with the release it came from.
+
+[`version.json`](version.json) is now only the _baseline_: what an untagged
+build — local, a branch, a pull request — is stamped with. Bump it when
+starting work on the next version. Releases do not read it.
+
+Do not edit versions in `package.json` or `manifest.xml` by hand.
+`tools/version/resolve.ts` works out the version and
+`tools/version/apply.ts` writes it into the package manifests during a
+release. Both are inspectable:
+
+```console
+$ pnpm version:show                        # what would this build be?
+$ RECITE_VERSION=v1.2.3 pnpm version:show  # rehearse a release
+$ pnpm version:check                       # package.json files agree?
+```
+
+A tag the resolver cannot read — `nightly`, `v1.2`, `release-1.2.3` — fails
+the release rather than falling back. Publishing the baseline version under a
+tag named something else is how a release ends up claiming to be a version it
+is not.
+
+A prerelease tag (`v1.2.3-rc.1`) is accepted: npm gets `1.2.3-rc.1`, and the
+manifest gets `1.2.3.0`. Note that every prerelease of a patch produces the
+same Office version, so Word will not see a later one as an upgrade. The
+build warns about this.
 
 `manifest.xml` is not checked in at all. Almost every value in it is a URL that
 has to match the deployment, so it is generated into `dist/` next to the pages

@@ -12,6 +12,9 @@
   "scripts": {
     "build": "pnpm -r --filter \"./packages/*\" build && pnpm --filter @recite/web build",
     "build:release": "pnpm build && pnpm manifest && pnpm checksums",
+    "version:show": "tsx tools/version/resolve.ts",
+    "version:apply": "tsx tools/version/apply.ts",
+    "version:check": "tsx tools/version/apply.ts --check",
     "manifest": "tsx tools/manifest/generate.ts",
     "checksums": "tsx tools/integrity/generate.ts",
     "verify:checksums": "tsx tools/integrity/verify.ts",
