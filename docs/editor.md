@@ -17,7 +17,7 @@ That is the whole rule. A file becomes a document; text pasted stays text.
 | ------------------ | ---------------------------------------------------------------- |
 | Editing            | type, cut, paste, undo — it is a `contenteditable`, not a viewer |
 | Formatting         | bold, italic, underline, by toolbar or <kbd>Ctrl</kbd>+B/I/U     |
-| Findings           | marked in the text, by severity, as you check                    |
+| Findings           | marked in the text; click one to jump to it                      |
 | Fixes              | applied in place, keeping the formatting around them             |
 | Pincite quotations | in the margin, anchored to the citation, clickable               |
 | Saving             | the marks go into `.docx`, `.odt`, `.rtf` and `.html`            |
@@ -110,6 +110,49 @@ the start of the paragraph on every character typed.
 `EditorHost` is a third `DocumentHost` alongside `BrowserHost` and `WordHost`.
 Everything above that seam is unchanged: `useReCite` still calls
 `read`/`apply`/`reveal` and still does not know which surface it has.
+
+## Jumping to a citation
+
+The citation in a finding **is** the control: click it and the document scrolls
+to that citation, selects it, and lights it up for a moment. There is no
+separate _Show_ button, because a finding is a claim about a specific run of
+characters and the natural way to ask "where is that?" is to press the thing
+itself. It is a real `<button>`, so it is reachable by keyboard and announced
+as an action.
+
+Three details are worth their code:
+
+- **The frame scrolls, not the window.** `scrollIntoView` on an ancestor of the
+  range would move the whole page — jarring, and it takes the panel the click
+  came from off screen. The editor scrolls its own overflow container by the
+  difference between the citation's rectangle and the frame's.
+- **A moment of colour.** Scrolling a citation into view is not enough on a
+  page of prose; the eye still has to find it. A separate highlight layer,
+  outside the ones a check paints, is set on the jump and cleared on a timer —
+  it fades rather than staying, because a permanent mark on the last thing you
+  clicked is noise by the third click.
+- **A miss is reported.** Offsets come from the last check and the document can
+  move underneath them. `reveal` returns whether it landed, and the status line
+  says so when it did not. A click that silently does nothing reads as a broken
+  button.
+
+The plain text box gets the same behaviour by a different route. `setSelectionRange`
+selects but does not scroll, so `apps/web/src/textarea.ts` measures where the
+offset sits — a hidden mirror with the same font, width and wrapping rules,
+filled with the text up to that point — and scrolls there. Wrapping is
+accounted for because the mirror wraps the same way, which is exactly what an
+estimate from line counts gets wrong.
+
+Clicking a note in the margin goes the other way, to the citation it is about.
+
+Both surfaces focus with `preventScroll`. Focusing an element scrolls the
+window to it by default, which would undo the frame scroll and take the panel
+the click came from off screen.
+
+The jump lands on the span the _rule_ is about, which is not always the whole
+citation: `CT005` complains about a redundant `(U.S.` and selects exactly that.
+Landing on the offending characters is the point — it is the difference between
+"this citation has a problem" and "this is the problem".
 
 ## Comments in the margin
 

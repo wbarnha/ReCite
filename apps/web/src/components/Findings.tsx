@@ -100,7 +100,26 @@ function Finding({
       </header>
 
       <p>{diagnostic.message}</p>
-      <div className="cite">{diagnostic.citationText}</div>
+
+      {/*
+        The citation is the jump. A finding is a claim about a specific run of
+        characters somewhere in the document, and the natural way to ask "where
+        is that?" is to click the thing itself — not to hunt for a button
+        labelled Show. It is a real `<button>`, so it is reachable by keyboard
+        and announced as an action.
+      */}
+      {onReveal ? (
+        <button
+          type="button"
+          className="cite jump"
+          title="Go to this citation in the document"
+          onClick={() => onReveal(diagnostic.span.start, diagnostic.span.end)}
+        >
+          {diagnostic.citationText}
+        </button>
+      ) : (
+        <div className="cite">{diagnostic.citationText}</div>
+      )}
 
       {fix && (
         <div className={`fix ${fix.safety === "unsafe" ? "unsafe" : ""}`}>
@@ -110,21 +129,13 @@ function Finding({
         </div>
       )}
 
-      <div className="actions">
-        {onReveal && (
-          <button
-            type="button"
-            onClick={() => onReveal(diagnostic.span.start, diagnostic.span.end)}
-          >
-            Show
-          </button>
-        )}
-        {fix && onApply && (
+      {fix && onApply && (
+        <div className="actions">
           <button type="button" onClick={() => onApply(diagnostic)}>
             Apply this fix
           </button>
-        )}
-      </div>
+        </div>
+      )}
     </article>
   );
 }

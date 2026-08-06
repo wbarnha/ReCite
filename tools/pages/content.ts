@@ -507,8 +507,10 @@ const tutorial: Page = {
     </p>
     <p>
       Each one is marked in the document where it is, and listed beside it.
-      Click a finding to jump to it; each names the rule that fired, so you can
-      look it up rather than take it on faith.
+      <strong>Click the citation in a finding and the document goes there</strong>
+      — it scrolls to that citation, selects it, and lights it up for a moment.
+      Each finding also names the rule that fired, so you can look it up rather
+      than take it on faith.
     </p>
 
     <h2>5. Notice what it does <em>not</em> say</h2>

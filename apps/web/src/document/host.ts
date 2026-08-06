@@ -14,7 +14,7 @@
 
 import type { Correction } from "@recite/core";
 
-import type { ApplyOutcome, DocumentHost } from "../host.js";
+import type { ApplyOutcome, DocumentHost, RevealOutcome } from "../host.js";
 
 import type { RichDocument } from "./model.js";
 
@@ -23,7 +23,8 @@ export interface EditorHandle {
   text(): string;
   document(): RichDocument;
   apply(corrections: readonly Correction[]): ApplyOutcome;
-  reveal(start: number, end: number): void;
+  /** `expected` is the text those offsets covered when the check ran. */
+  reveal(start: number, end: number, expected?: string): RevealOutcome;
 }
 
 export class EditorHost implements DocumentHost {
@@ -56,8 +57,12 @@ export class EditorHost implements DocumentHost {
    * by a different route. Implementing `annotate` to do nothing would put a
    * sentence in the status line that was not true.
    */
-  reveal(_text: string, start: number, end: number): Promise<void> {
-    this.handle()?.reveal(start, end);
-    return Promise.resolve();
+  reveal(text: string, start: number, end: number): Promise<RevealOutcome> {
+    return Promise.resolve(
+      this.handle()?.reveal(start, end, text.slice(start, end)) ?? {
+        found: false,
+        reason: "the editor is not open",
+      },
+    );
   }
 }

@@ -55,7 +55,18 @@ export function Annotations({
           className={`annotation${annotation.quotation ? "" : " unquoted"}`}
         >
           <header>
-            <span className="cite">{annotation.citation}</span>
+            {onReveal ? (
+              <button
+                type="button"
+                className="cite jump"
+                title="Go to this citation in the document"
+                onClick={() => onReveal(annotation.span.start, annotation.span.end)}
+              >
+                {annotation.citation}
+              </button>
+            ) : (
+              <span className="cite">{annotation.citation}</span>
+            )}
             {annotation.pinCite && <span>at {annotation.pinCite}</span>}
           </header>
 
@@ -67,21 +78,13 @@ export function Annotations({
             <p className="annotation-missing">{annotation.note}</p>
           )}
 
-          <div className="actions">
-            {onReveal && (
-              <button
-                type="button"
-                onClick={() => onReveal(annotation.span.start, annotation.span.end)}
-              >
-                Show
-              </button>
-            )}
-            {annotation.url && (
+          {annotation.url && (
+            <div className="actions">
               <a href={annotation.url} target="_blank" rel="noreferrer noopener">
                 Read it on {annotation.source}
               </a>
-            )}
-          </div>
+            </div>
+          )}
         </article>
       ))}
     </section>

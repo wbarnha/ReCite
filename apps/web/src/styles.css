@@ -759,3 +759,65 @@ select {
     margin-bottom: 0.5rem;
   }
 }
+
+/* -------------------------------------------------- jumping to a citation --- */
+
+/*
+ * The citation is the control.
+ *
+ * A finding is a claim about a specific run of characters somewhere in the
+ * document, and the natural way to ask "where is that?" is to click the thing
+ * itself. Styled to look like the text it replaced rather than like a button,
+ * because it is not a command — it is the citation, and pressing it takes you
+ * there.
+ */
+button.cite.jump {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 1px solid transparent;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+  padding: 0.25rem 0.35rem;
+  margin: 0;
+  border-radius: 4px;
+}
+
+button.cite.jump:hover,
+button.cite.jump:focus-visible {
+  border-color: var(--accent);
+  background: var(--surface);
+}
+
+.annotation header button.cite.jump {
+  display: inline-block;
+  width: auto;
+  padding: 0 0.2rem;
+}
+
+/* The moment of colour that lets the eye find what was scrolled to. */
+::highlight(recite-target) {
+  background-color: rgb(26 79 138 / 32%);
+  color: var(--fg);
+}
+
+.margin-note-jump {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0;
+  margin: 0 0 0.2rem;
+  border: none;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  font-style: italic;
+  color: inherit;
+  cursor: pointer;
+}
+
+.margin-note-jump:hover,
+.margin-note-jump:focus-visible {
+  text-decoration: underline;
+}
