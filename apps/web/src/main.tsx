@@ -5,6 +5,7 @@ import { createRoot } from "react-dom/client";
 
 import { Annotations } from "./components/Annotations.js";
 import { AuthorityPicker } from "./components/AuthorityPicker.js";
+import { DocumentEditor } from "./components/DocumentEditor.js";
 import { FileDrop } from "./components/FileDrop.js";
 import { Findings } from "./components/Findings.js";
 import { Footer } from "./components/Footer.js";
@@ -13,6 +14,10 @@ import { OcrPicker } from "./components/OcrPicker.js";
 import { ProfilePicker } from "./components/ProfilePicker.js";
 import { BUILD_INFO, SHORT_COMMIT } from "./build-info.js";
 import { AUTHORITY_PROVENANCE } from "./authority.js";
+import type { EditorHandle } from "./document/host.js";
+import { EditorHost } from "./document/host.js";
+import type { RichDocument } from "./document/model.js";
+import { richFromText } from "./document/model.js";
 import { BrowserHost } from "./host.js";
 import type { ImportResult } from "./import/index.js";
 import type { OcrMode, OcrSettings } from "./import/ocr-options.js";
@@ -34,15 +39,30 @@ function WebApp() {
   const [imported, setImported] = useState<(ImportResult & { name: string }) | null>(
     null,
   );
+  /**
+   * The document to edit, or `null` for the plain-text surface.
+   *
+   * Set when a file is opened, and only then. Somebody pasting a paragraph to
+   * check one citation wants a text box; somebody who has just opened an
+   * eleven-page filing wants to see the filing. The toggle below exists so
+   * neither is a trap.
+   */
+  const [opened, setOpened] = useState<RichDocument | null>(null);
+  const [plainText, setPlainText] = useState(false);
   const [ocr, setOcr] = useState<OcrSettings>(() => ({
     ...DEFAULT_OCR_SETTINGS,
     workers: workersFromQuery(window.location.search),
   }));
   const editor = useRef<HTMLTextAreaElement>(null);
+  const page = useRef<EditorHandle>(null);
 
-  // The textarea is the document. Reads come from the live DOM value so that
-  // checking always reflects what the user can see, not a stale copy.
-  const host = useMemo(
+  const editing = opened !== null && !plainText;
+
+  // The surface is the document — reads come from the live DOM so that
+  // checking always reflects what the user can see, not a stale copy. Two
+  // hosts, because a textarea is edited by string surgery and a formatted
+  // document is not.
+  const textareaHost = useMemo(
     () =>
       new BrowserHost(
         () => editor.current?.value ?? "",
@@ -56,12 +76,16 @@ function WebApp() {
       ),
     [],
   );
+  const editorHost = useMemo(() => new EditorHost(() => page.current), []);
+  const host = editing ? editorHost : textareaHost;
 
   const recite = useReCite({ host, corpus: SAMPLE_CORPUS });
 
   const loadSample = useCallback(() => {
     setDraft(SAMPLE_TEXT);
     setImported(null);
+    // Pasted text, not an opened document: back to the text box.
+    setOpened(null);
   }, []);
 
   // Everything a saved report needs to stand on its own: what was checked,
@@ -155,6 +179,11 @@ function WebApp() {
             onImported={(result, name) => {
               setDraft(result.text);
               setImported({ ...result, name });
+              // A supplied file becomes a document. `richFromText` builds a
+              // fresh object every time, which is what tells the editor a new
+              // document has arrived rather than the same one re-rendered.
+              setOpened(richFromText(result.text));
+              setPlainText(false);
             }}
           />
           {imported && (
@@ -202,15 +231,46 @@ function WebApp() {
               )}
             </div>
           )}
-          <textarea
-            ref={editor}
-            rows={26}
-            value={draft}
-            spellCheck={false}
-            placeholder="Paste a brief, a memo, or any text containing citations…"
-            onChange={(event) => setDraft(event.target.value)}
-            aria-label="Document text"
-          />
+          {editing ? (
+            <DocumentEditor
+              ref={page}
+              initial={opened}
+              diagnostics={recite.result?.diagnostics ?? []}
+              annotations={recite.annotations}
+              onInput={setDraft}
+              disabled={recite.busy}
+            />
+          ) : (
+            <textarea
+              ref={editor}
+              rows={26}
+              value={draft}
+              spellCheck={false}
+              placeholder="Paste a brief, a memo, or any text containing citations…"
+              onChange={(event) => setDraft(event.target.value)}
+              aria-label="Document text"
+            />
+          )}
+          {opened && (
+            <div className="toolbar">
+              <label className="checkbox">
+                <input
+                  type="checkbox"
+                  checked={plainText}
+                  disabled={recite.busy}
+                  onChange={(event) => {
+                    // Switching back to the editor re-seeds it from whatever
+                    // the text box now holds, so an edit made in either
+                    // surface survives the trip. Formatting does not, and the
+                    // label says so.
+                    if (!event.target.checked) setOpened(richFromText(draft));
+                    setPlainText(event.target.checked);
+                  }}
+                />
+                Edit as plain text instead (drops any formatting you applied)
+              </label>
+            </div>
+          )}
           <div className="toolbar">
             <button
               type="button"
@@ -256,6 +316,7 @@ function WebApp() {
             text={draft}
             context={reportContext}
             comments={recite.comments}
+            document={editing ? () => page.current?.document() : undefined}
             disabled={recite.busy}
           />
         </section>

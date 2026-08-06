@@ -15,6 +15,7 @@
 
 import { describe, expect, it } from "vitest";
 
+import { richFromText } from "../src/document/model.js";
 import type { DocumentComment } from "../src/export/comments.js";
 import { anchoredComments, layoutComments } from "../src/export/comments.js";
 import {
@@ -66,44 +67,59 @@ const buffer = (blob: Blob) => blob.arrayBuffer();
 
 describe("working out where the markers go", () => {
   it("splits a paragraph around the span the comment covers", () => {
-    const paragraphs = layoutComments("abc DEF ghi", [
+    const paragraphs = layoutComments(richFromText("abc DEF ghi"), [
       { span: { start: 4, end: 7 }, text: "note" },
     ]);
     expect(paragraphs).toHaveLength(1);
     expect(paragraphs[0]!.chunks).toEqual([
-      { kind: "text", text: "abc " },
+      { kind: "run", run: { text: "abc " } },
       { kind: "start", id: 0 },
-      { kind: "text", text: "DEF" },
+      { kind: "run", run: { text: "DEF" } },
       { kind: "end", id: 0 },
-      { kind: "text", text: " ghi" },
+      { kind: "run", run: { text: " ghi" } },
     ]);
   });
 
   it("keeps one paragraph per line, so the document shape survives", () => {
-    expect(layoutComments("a\n\nb", [])).toHaveLength(3);
+    expect(layoutComments(richFromText("a\n\nb"), [])).toHaveLength(3);
+  });
+
+  it("keeps the marks a run carried when it is split by a marker", () => {
+    // A comment that starts inside a bold citation must not un-bold it.
+    const bold = {
+      paragraphs: [{ runs: [{ text: "abc DEF ghi", bold: true }] }],
+    };
+    const [paragraph] = layoutComments(bold, [
+      { span: { start: 4, end: 7 }, text: "note" },
+    ]);
+    const runs = paragraph!.chunks.flatMap((chunk) =>
+      chunk.kind === "run" ? [chunk.run] : [],
+    );
+    expect(runs.map((run) => run.text)).toEqual(["abc ", "DEF", " ghi"]);
+    expect(runs.every((run) => run.bold)).toBe(true);
   });
 
   it("opens in one paragraph and closes in another when a span crosses a break", () => {
-    const paragraphs = layoutComments("first\nsecond", [
+    const paragraphs = layoutComments(richFromText("first\nsecond"), [
       { span: { start: 2, end: 9 }, text: "note" },
     ]);
-    expect(paragraphs[0]!.chunks.map((c) => c.kind)).toEqual(["text", "start", "text"]);
-    expect(paragraphs[1]!.chunks.map((c) => c.kind)).toEqual(["text", "end", "text"]);
+    expect(paragraphs[0]!.chunks.map((c) => c.kind)).toEqual(["run", "start", "run"]);
+    expect(paragraphs[1]!.chunks.map((c) => c.kind)).toEqual(["run", "end", "run"]);
   });
 
   it("closes one range before opening the next at the same offset", () => {
     // Otherwise two adjacent comments overlap, and Word draws one bubble
     // covering both citations.
-    const paragraphs = layoutComments("abcdef", [
+    const paragraphs = layoutComments(richFromText("abcdef"), [
       { span: { start: 0, end: 3 }, text: "one" },
       { span: { start: 3, end: 6 }, text: "two" },
     ]);
     expect(paragraphs[0]!.chunks.map((c) => c.kind)).toEqual([
       "start",
-      "text",
+      "run",
       "end",
       "start",
-      "text",
+      "run",
       "end",
     ]);
   });
@@ -116,7 +132,7 @@ describe("working out where the markers go", () => {
       { span: { start: 0, end: 3 }, text: "the real one" },
     ];
     expect(anchoredComments(comments)).toHaveLength(1);
-    const [paragraph] = layoutComments("abcdef", comments);
+    const [paragraph] = layoutComments(richFromText("abcdef"), comments);
     expect(paragraph!.chunks).toContainEqual({ kind: "start", id: 0 });
   });
 });
@@ -205,7 +221,9 @@ describe("formats with nowhere to put a comment", () => {
     "%s is saved as though there were none",
     async (id) => {
       const format = EXPORT_FORMATS.find((f) => f.id === id)!;
-      const withComments = await buildExport(format, TEXT, CONTEXT, COMMENTS);
+      const withComments = await buildExport(format, TEXT, CONTEXT, {
+        comments: COMMENTS,
+      });
       const without = await buildExport(format, TEXT, CONTEXT);
       // Identical bytes: the user asked to save their document, not a
       // marked-up copy of it. What each format does with a note is stated

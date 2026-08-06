@@ -214,6 +214,16 @@ minimum Pages needs.
   escape. A citation containing `<script>` is displayed as text. `react/no-danger`
   is now an error, so re-introducing one is a build failure rather than a
   review question.
+
+  The document editor is the one place this could plausibly have slipped: it
+  renders a document someone opened into a `contenteditable`, which is exactly
+  the shape of code that reaches for `innerHTML`. It does not —
+  `apps/web/src/document/dom.ts` builds every node with `createElement` and
+  `createTextNode`, so a `.docx` full of markup is rendered as the characters
+  it contains. Findings are painted with the CSS Custom Highlight API rather
+  than by wrapping ranges in elements, which means ReCite adds no nodes to the
+  document at all, and nothing it draws can end up in a saved file.
+
 - **No storage, and no unaccounted network calls.** No `XMLHttpRequest`, no
   `localStorage`, no cookies, no IndexedDB. Every `fetch` call site in the
   shipped source is enumerated in `tools/test/privacy-claims.test.ts` with a

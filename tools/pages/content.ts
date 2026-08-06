@@ -467,7 +467,22 @@ const tutorial: Page = {
       </p>
     </div>
 
-    <h2>2. Read the warning</h2>
+    <h2>2. Look at it</h2>
+    <p>
+      Because a file was opened rather than pasted, the document arrives as a
+      <strong>page</strong> rather than as a text box: paragraphs, serif type,
+      and room in the margin for the notes that come later. You can edit it —
+      type, cut, paste, and use <strong>B</strong>, <strong>I</strong> and
+      <strong>U</strong> or <kbd>Ctrl</kbd>+B/I/U for emphasis. Anything you
+      style here is kept when you save.
+    </p>
+    <p>
+      Paste into ReCite instead of opening a file and you get the plain text
+      box, which is the right control for checking one citation. A checkbox
+      moves between the two, so neither is a trap.
+    </p>
+
+    <h2>3. Read the warning</h2>
     <p>
       When it finishes, the app says the document was <em>partly read by
       OCR</em>. That warning is not boilerplate. Optical character recognition
@@ -483,7 +498,7 @@ const tutorial: Page = {
       scan.
     </p>
 
-    <h2>3. Check it</h2>
+    <h2>4. Check it</h2>
     <p>
       Press <strong>Check citations</strong>. ReCite finds about
       <strong>25 citations</strong> and reports a handful of problems —
@@ -491,11 +506,12 @@ const tutorial: Page = {
       to, a page range written the long way.
     </p>
     <p>
-      Click any finding to jump to it in the document. Each one names the rule
-      that fired, so you can look it up rather than take it on faith.
+      Each one is marked in the document where it is, and listed beside it.
+      Click a finding to jump to it; each names the rule that fired, so you can
+      look it up rather than take it on faith.
     </p>
 
-    <h2>4. Notice what it does <em>not</em> say</h2>
+    <h2>5. Notice what it does <em>not</em> say</h2>
     <div class="panel">
       <p>
         <strong>ReCite does not report that these cases do not exist.</strong>
@@ -515,7 +531,7 @@ const tutorial: Page = {
       that means a source of truth ReCite does not carry.
     </p>
 
-    <h2>5. Check that the cases exist</h2>
+    <h2>6. Check that the cases exist</h2>
     <p>
       This is the part that catches a fabrication. Under <strong>Verify cases
       against</strong> there are two ways to do it, and the difference between
@@ -554,7 +570,7 @@ const tutorial: Page = {
       whole job.
     </p>
 
-    <h2>6. Pull the pincites</h2>
+    <h2>7. Pull the pincites</h2>
     <p>
       With CourtListener on, <strong>Pull pincites</strong> reads the page each
       pin cite points at and shows you the passage. <em>Miller</em> at 371 is no
@@ -562,10 +578,11 @@ const tutorial: Page = {
       next to the proposition it is cited for.
     </p>
     <p>
-      Each quotation is written into the saved <code>.docx</code> or
-      <code>.odt</code> as a real comment, in the margin next to the citation,
-      so it survives being emailed to somebody who has never heard of this tool.
-      In the Word add-in they become Word comments in the open document.
+      They appear in the margin of the page, next to the citation each one is
+      about — and are written into the saved <code>.docx</code> or
+      <code>.odt</code> as real comments, so they survive being emailed to
+      somebody who has never heard of this tool. In the Word add-in they become
+      Word comments in the open document.
     </p>
     <p>
       Where a page is not marked in CourtListener's copy of the opinion, ReCite
@@ -574,7 +591,7 @@ const tutorial: Page = {
       way into a filing.
     </p>
 
-    <h2>7. Fix what is safe</h2>
+    <h2>8. Fix what is safe</h2>
     <p>
       <strong>Fix</strong> applies only corrections that change how a citation
       is spelled, never which authority it points at: spacing, abbreviation,
@@ -587,13 +604,16 @@ const tutorial: Page = {
       you.
     </p>
 
-    <h2>8. Save it</h2>
+    <h2>9. Save it</h2>
     <p>
       Choose a format under <strong>Save as</strong> and press
       <strong>Download</strong>. The document comes back as
       <code>.docx</code>, <code>.odt</code>, <code>.rtf</code>,
       <code>.pdf</code>, <code>.html</code>, <code>.md</code> or
-      <code>.txt</code>.
+      <code>.txt</code>, with any emphasis you applied and any quotations you
+      pulled. The PDF is the exception on both counts: it is written directly,
+      in Helvetica, with no second font to switch to and no notion of a
+      comment.
     </p>
     <p>
       You can also save the <strong>findings report</strong> — as JSON for

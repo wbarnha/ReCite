@@ -379,3 +379,106 @@ describe("the format list", () => {
     ]);
   });
 });
+
+describe("saving what the editor holds", () => {
+  /**
+   * `The <b>pleading</b> standard, <i>Iqbal</i>, 556 U.S. 662.`
+   *
+   * ReCite still does not read the formatting of a document you open — it
+   * works on the text of citations. What it must not do is lose the marks
+   * someone applied in the editor, because a tool that silently un-bolds a
+   * case name on save is worse than one with no editor at all.
+   */
+  const FORMATTED = {
+    paragraphs: [
+      {
+        runs: [
+          { text: "The " },
+          { text: "pleading", bold: true },
+          { text: " standard, " },
+          { text: "Iqbal", italic: true },
+          { text: ", " },
+          { text: "556 U.S. 662", underline: true },
+          { text: "." },
+        ],
+      },
+    ],
+  };
+
+  const PLAIN = "The pleading standard, Iqbal, 556 U.S. 662.";
+
+  const save = async (id: string) =>
+    buildExport(
+      EXPORT_FORMATS.find((f) => f.id === id)!,
+      PLAIN,
+      CONTEXT,
+      {
+        document: FORMATTED,
+      },
+    );
+
+  it("keeps the text identical to the string the engine checked", async () => {
+    // Both directions of the invariant the editor rests on.
+    expect(await readDocx(await blobBuffer(await save("docx")))).toBe(PLAIN);
+    expect(await readOdt(await blobBuffer(await save("odt")))).toBe(PLAIN);
+    expect(readRtf(await blobText(await save("rtf")))).toBe(PLAIN);
+    expect(readHtml(await blobText(await save("html")))).toBe(PLAIN);
+  });
+
+  it("writes Word run properties for each mark", () => {
+    const xml = docxDocumentXml(FORMATTED);
+    expect(xml).toContain("<w:rPr><w:b/></w:rPr>");
+    expect(xml).toContain("<w:rPr><w:i/></w:rPr>");
+    expect(xml).toContain('<w:rPr><w:u w:val="single"/></w:rPr>');
+    // Unformatted runs get no `rPr` at all rather than an empty one.
+    expect(xml).toContain('<w:r><w:t xml:space="preserve">The </w:t></w:r>');
+  });
+
+  it("declares the ODF styles a run can point at, and points at them", () => {
+    // ODF has no inline formatting attributes: a run names a style, and a
+    // style that was never declared is silently ignored by the reader.
+    const xml = odtContentXml(FORMATTED);
+    expect(xml).toContain("<office:automatic-styles>");
+    expect(xml).toContain('style:name="T_b"');
+    expect(xml).toContain('style:name="T_biu"');
+    expect(xml).toContain('<text:span text:style-name="T_b">pleading</text:span>');
+    expect(xml).toContain('<text:span text:style-name="T_u">556 U.S. 662</text:span>');
+  });
+
+  it("writes semantic HTML rather than inline styles", async () => {
+    const html = await blobText(await save("html"));
+    expect(html).toContain("<strong>pleading</strong>");
+    expect(html).toContain("<em>Iqbal</em>");
+    expect(html).toContain("<u>556 U.S. 662</u>");
+  });
+
+  it("scopes RTF formatting to a group, because it is stateful", async () => {
+    // `\b` stays on until `\b0`; a group restores the previous state at the
+    // closing brace whatever happened inside.
+    const rtf = await blobText(await save("rtf"));
+    expect(rtf).toContain("{\\b pleading}");
+    expect(rtf).toContain("{\\i Iqbal}");
+    expect(rtf).toContain("{\\ul 556 U.S. 662}");
+  });
+
+  it("still writes a plain document when nothing is formatted", async () => {
+    const withDocument = await blobText(
+      await buildExport(
+        EXPORT_FORMATS.find((f) => f.id === "rtf")!,
+        SAMPLE,
+        CONTEXT,
+        {
+          document: undefined,
+        },
+      ),
+    );
+    const without = await blobText(
+      await buildExport(
+        EXPORT_FORMATS.find((f) => f.id === "rtf")!,
+        SAMPLE,
+        CONTEXT,
+      ),
+    );
+    expect(withDocument).toBe(without);
+  });
+});

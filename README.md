@@ -178,6 +178,36 @@ real implementation of a format from 1997, and a half-working one returns
 plausible text with pieces missing, which is the worst possible outcome here.
 Save as `.docx`, `.rtf` or `.txt` instead.
 
+### An opened file becomes a document
+
+A textarea is the right control for pasting a paragraph and checking one
+citation. It is the wrong one for a brief. So when a **file** is opened — not
+when text is pasted — the document becomes a page: serif type, paragraph
+structure, the findings marked where they are in the text, and the pincite
+quotations in a margin beside the citations they belong to.
+
+|                    |                                                            |
+| ------------------ | ---------------------------------------------------------- |
+| Editing            | type, cut, paste, undo                                     |
+| Formatting         | bold, italic, underline — toolbar or <kbd>Ctrl</kbd>+B/I/U |
+| Findings           | marked in the text as you check, by severity               |
+| Fixes              | applied in place, keeping the formatting around them       |
+| Pincite quotations | in the margin, anchored to the citation                    |
+
+There is no rich-text library behind it. Findings are painted with the
+browser's own Custom Highlight API rather than wrapped in elements, so nothing
+ReCite draws ever reaches the saved file; marks live in a document model rather
+than in `execCommand`, so a fix landing inside a bold citation gives back a
+bold citation. See [docs/editor.md](docs/editor.md).
+
+**ReCite still does not read the formatting of a document you open.** It works
+on the text of citations. What is new is that the formatting _you_ apply is
+kept, and is written out when you save — an editor that silently un-bolded a
+case name would be worse than no editor at all.
+
+A checkbox goes back to the plain text box, and back again. Neither surface is
+a trap.
+
 ### Scanned PDFs
 
 Pages that already have a text layer are read directly; only pages without one
@@ -243,6 +273,11 @@ Pincite quotations ride along as real comments in `.docx` and `.odt`, and as
 data in every report format. The other formats have no notion of a comment, and
 ReCite does not invent one — the **Save as** note says so rather than dropping
 them quietly.
+
+Bold, italic and underline applied in the editor survive into `.docx`, `.odt`,
+`.rtf` and `.html`. Not into the PDF: it is written directly, using Helvetica,
+with no second font embedded to switch to — which the format note says rather
+than dropping the emphasis silently.
 
 The list mirrors what ReCite can read, because a tool that opens a `.docx` and
 can only hand back a `.txt` has quietly lost the user's format. The writers are
@@ -370,7 +405,7 @@ change to a single rule.
 ```console
 $ pnpm install
 $ pnpm dev            # web app on :3000
-$ pnpm test           # 922 tests
+$ pnpm test           # 1103 tests
 $ pnpm check          # lint + format + types + tests, what CI runs
 $ pnpm build:release  # build, generate manifest.xml, write checksums
 ```

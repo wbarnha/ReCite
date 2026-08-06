@@ -9,6 +9,9 @@
  * and can only give back a `.txt` has quietly lost the user's format.
  */
 
+import type { RichDocument, RichRun } from "../document/model.js";
+import { richFromText } from "../document/model.js";
+
 import type { DocumentComment } from "./comments.js";
 import { writeDocx, writeOdt } from "./office.js";
 import { writePdf } from "./pdf.js";
@@ -76,7 +79,9 @@ export const EXPORT_FORMATS: readonly ExportFormat[] = [
     label: "PDF",
     extension: ".pdf",
     mime: "application/pdf",
-    note: "Fixed layout, Helvetica. Not a copy of any PDF you opened.",
+    note:
+      "Fixed layout, Helvetica. Not a copy of any PDF you opened, and no bold " +
+      "or italic — there is no second font embedded to switch to.",
   },
   {
     id: "report.json",
@@ -165,17 +170,27 @@ function escapeHtml(value: string): string {
     .replace(/"/g, "&quot;");
 }
 
-function toHtml(text: string, title: string): string {
+/** A run, with the marks the editor applied. */
+function htmlRun(run: RichRun): string {
+  let out = escapeHtml(run.text);
+  // Nested in a fixed order so the round trip through `readHtml` is stable,
+  // and semantic rather than styled: `<strong>` survives a paste into another
+  // editor in a way an inline `style` attribute does not.
+  if (run.underline) out = `<u>${out}</u>`;
+  if (run.italic) out = `<em>${out}</em>`;
+  if (run.bold) out = `<strong>${out}</strong>`;
+  return out;
+}
+
+function toHtml(document: RichDocument, title: string): string {
   // Joined with nothing, and a blank line is an empty `<p>` rather than one
   // holding `&nbsp;`. Both matter for the round trip: whitespace between
   // block elements is content to an HTML reader, so newlines here turned
   // every paragraph gap into a blank line, and an `&nbsp;` inside an
   // otherwise-empty paragraph came back as a line with a space in it. The CSS
   // margin gives the gap its height, so it still looks right in a browser.
-  const body = text
-    .replace(/\r\n?/g, "\n")
-    .split("\n")
-    .map((line) => `<p>${escapeHtml(line)}</p>`)
+  const body = document.paragraphs
+    .map((paragraph) => `<p>${paragraph.runs.map(htmlRun).join("")}</p>`)
     .join("");
 
   return `<!doctype html>
@@ -203,7 +218,7 @@ ${body}
  * section sign or an en dash written raw into an ANSI RTF is mojibake in Word,
  * so anything outside ASCII becomes a `\uN` escape with a `?` fallback.
  */
-function toRtf(text: string): string {
+function rtfText(text: string): string {
   let body = "";
   for (const ch of text.replace(/\r\n?/g, "\n")) {
     if (ch === "\n") {
@@ -219,6 +234,27 @@ function toRtf(text: string): string {
       body += code < 128 ? ch : `\\u${code > 32767 ? code - 65536 : code}?`;
     }
   }
+  return body;
+}
+
+/**
+ * A formatted run, wrapped in a group.
+ *
+ * RTF's formatting commands are stateful — `\b` stays on until `\b0` — so a
+ * group (`{…}`) is the safe way to scope them: the reader restores the
+ * previous state at the closing brace whatever happened inside.
+ */
+function rtfRun(run: RichRun): string {
+  const on =
+    (run.bold ? "\\b" : "") + (run.italic ? "\\i" : "") + (run.underline ? "\\ul" : "");
+  const body = rtfText(run.text);
+  return on ? `{${on} ${body}}` : body;
+}
+
+function toRtf(document: RichDocument): string {
+  const body = document.paragraphs
+    .map((paragraph) => paragraph.runs.map(rtfRun).join(""))
+    .join("\\par\n");
 
   return `{\\rtf1\\ansi\\ansicpg1252\\uc1\\deff0{\\fonttbl{\\f0\\froman Times New Roman;}}\n\\f0\\fs22 ${body}}`;
 }
@@ -340,32 +376,50 @@ export function isReport(format: ExportFormat): boolean {
   return format.id.startsWith("report.");
 }
 
-/**
- * Build the bytes for one format.
- *
- * `comments` are written into the formats that have a concept of one —
- * `.docx` and `.odt`. Everything else ignores them rather than inventing a
- * representation: a footnote bolted onto a plain-text file changes the
- * document, and the user asked to save their document, not a marked-up copy
- * of it. What each format does with them is stated in the `Save as` note.
- */
+export interface ExportExtras {
+  /**
+   * Pincite notes to write into the file, for the formats that carry one.
+   *
+   * `.docx` and `.odt` have a concept of a comment. Everything else ignores
+   * them rather than inventing a representation: a footnote bolted onto a
+   * plain-text file changes the document, and the user asked to save their
+   * document, not a marked-up copy of it. What each format does with them is
+   * stated in the `Save as` note.
+   */
+  readonly comments?: readonly DocumentComment[];
+  /**
+   * The document with its formatting, when the editor is the surface.
+   *
+   * Its plain text must equal `text` — the caller derives one from the other —
+   * so a format that cannot carry marks can go on using the string.
+   */
+  readonly document?: RichDocument;
+}
+
+/** Build the bytes for one format. */
 export async function buildExport(
   format: ExportFormat,
   text: string,
   context: ReportContext,
-  comments: readonly DocumentComment[] = [],
+  extras: ExportExtras = {},
 ): Promise<Blob> {
+  const comments = extras.comments ?? [];
+  const document = extras.document ?? richFromText(text);
+
   switch (format.id) {
     case "docx":
-      return writeDocx(text, comments);
+      return writeDocx(document, comments);
     case "odt":
-      return writeOdt(text, comments);
+      return writeOdt(document, comments);
     case "pdf":
+      // Helvetica only, and no embedded fonts — so there is no bold face to
+      // switch to. Saying so in the format note beats writing a PDF whose
+      // emphasis silently vanished.
       return writePdf(text);
     case "rtf":
-      return new Blob([toRtf(text)], { type: format.mime });
+      return new Blob([toRtf(document)], { type: format.mime });
     case "html":
-      return new Blob([toHtml(text, context.documentName)], { type: format.mime });
+      return new Blob([toHtml(document, context.documentName)], { type: format.mime });
     case "report.json":
       return new Blob([reportJson(context)], { type: format.mime });
     case "report.csv":
