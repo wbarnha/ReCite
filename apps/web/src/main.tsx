@@ -14,7 +14,6 @@ import { BrowserHost } from "./host.js";
 import type { ImportResult } from "./import/index.js";
 import type { OcrMode, OcrSettings } from "./import/ocr-options.js";
 import { DEFAULT_OCR_SETTINGS, workersFromQuery } from "./import/ocr-options.js";
-import { engineFromQuery } from "./import/engine.js";
 import { cacheSize, forgetAll } from "./import/cache.js";
 import { charsPerSecond, describePhases, formatMs } from "./import/metrics.js";
 import type { ReportContext } from "./export/index.js";
@@ -32,10 +31,6 @@ function WebApp() {
   const [imported, setImported] = useState<(ImportResult & { name: string }) | null>(
     null,
   );
-  // Which PDF stack reads the file. A query parameter, not a control: it
-  // exists so `tools/bench` can score the two against each other while the
-  // AGPL question in `import/engine.ts` is open.
-  const pdfEngine = useMemo(() => engineFromQuery(window.location.search), []);
   const [ocr, setOcr] = useState<OcrSettings>(() => ({
     ...DEFAULT_OCR_SETTINGS,
     workers: workersFromQuery(window.location.search),
@@ -126,7 +121,6 @@ function WebApp() {
           </div>
           <FileDrop
             ocr={ocr}
-            engine={pdfEngine}
             disabled={recite.busy}
             onImported={(result, name) => {
               setDraft(result.text);

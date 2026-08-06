@@ -31,9 +31,7 @@ import {
   OCR_MODE_HELP,
   OCR_MODE_LABEL,
   ocrSettingsKey,
-  scribeOcrPages,
 } from "../src/import/ocr-options.js";
-import { DEFAULT_PDF_ENGINE } from "../src/import/engine.js";
 import type { ImportResult } from "../src/import/index.js";
 
 const result = (text: string): ImportResult => ({
@@ -43,15 +41,6 @@ const result = (text: string): ImportResult => ({
 });
 
 describe("OCR modes", () => {
-  it("maps every mode to a value Scribe accepts", () => {
-    // Checked against scribe.js-ocr 0.14.3's `extractText` docs, which list
-    // 'all' | 'auto' | 'autoShallow' | 'autoDeep' | 'none'.
-    const accepted = new Set(["autoShallow", "all", "none"]);
-    for (const mode of OCR_MODES) {
-      expect(accepted.has(scribeOcrPages(mode)), mode).toBe(true);
-    }
-  });
-
   it("labels and explains every mode", () => {
     // A mode the picker can offer but cannot describe renders as `undefined`
     // in front of the user.
@@ -63,7 +52,6 @@ describe("OCR modes", () => {
 
   it("defaults to reading text layers and recognising only scans", () => {
     expect(DEFAULT_OCR_SETTINGS.mode).toBe("auto");
-    expect(scribeOcrPages(DEFAULT_OCR_SETTINGS.mode)).toBe("autoShallow");
   });
 
   it("gives every setting that changes the text its own cache key", () => {
@@ -86,20 +74,18 @@ describe("the session cache", () => {
     const b = new File(["identical"], "two-different-name.pdf");
     const c = new File(["different"], "one.pdf");
 
-    expect(await fileKey(a, DEFAULT_OCR_SETTINGS, DEFAULT_PDF_ENGINE)).toBe(
-      await fileKey(b, DEFAULT_OCR_SETTINGS, DEFAULT_PDF_ENGINE),
+    expect(await fileKey(a, DEFAULT_OCR_SETTINGS)).toBe(
+      await fileKey(b, DEFAULT_OCR_SETTINGS),
     );
-    expect(await fileKey(a, DEFAULT_OCR_SETTINGS, DEFAULT_PDF_ENGINE)).not.toBe(
-      await fileKey(c, DEFAULT_OCR_SETTINGS, DEFAULT_PDF_ENGINE),
+    expect(await fileKey(a, DEFAULT_OCR_SETTINGS)).not.toBe(
+      await fileKey(c, DEFAULT_OCR_SETTINGS),
     );
   });
 
   it("separates the same file read under different settings", async () => {
     const file = new File(["scan"], "brief.pdf");
-    expect(
-      await fileKey(file, { mode: "auto", workers: null }, DEFAULT_PDF_ENGINE),
-    ).not.toBe(
-      await fileKey(file, { mode: "always", workers: null }, DEFAULT_PDF_ENGINE),
+    expect(await fileKey(file, { mode: "auto", workers: null })).not.toBe(
+      await fileKey(file, { mode: "always", workers: null }),
     );
   });
 

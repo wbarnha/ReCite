@@ -10,9 +10,10 @@ $ pnpm test:browser  # the built site in real Chromium (needs `pnpm build:releas
 `pnpm test:browser` is separate because it needs a build and a browser. It is
 the only place two claims can actually be checked: that OCR turns a scanned
 page into readable citations, and that nothing the app does leaves the origin.
-The second is not paranoia — Scribe's CDN fallback URL is still a string in the
-bundle, because it is the default in library code we do not control, so the
-override has to be **observed** rather than assumed. The test intercepts every
+The second is not paranoia — tesseract.js's CDN fallbacks for its worker, its
+WebAssembly core and its language model are all still strings in the bundle,
+because they are the defaults in library code we do not control, so the
+overrides have to be **observed** rather than assumed. The test intercepts every
 request and fails if one goes off-origin.
 
 Its scanned-PDF fixture is generated, not committed: text is rendered in
@@ -98,9 +99,8 @@ way, so a configuration that is faster and recovers fewer citations is reported
 as a regression rather than an improvement.
 
 The scorer (`tools/bench/accuracy.ts`) compares two strings and knows nothing
-about Scribe. That is deliberate: it is how you would compare Scribe against a
-different engine, which is a live question while the AGPL licensing of
-`scribe.js-ocr` is unresolved.
+about any particular engine. That is deliberate: comparing two engines is what
+it was built for, and it is what settled the choice recorded below.
 
 ### What the numbers do not say
 
@@ -115,46 +115,52 @@ Two limits, stated because the table looks more conclusive than it is.
   under 100ms from a local server, which makes the warmup look pointless; on a
   real connection those two downloads are most of the wait.
 
-### The AGPL spike, and what it measured
+### How the OCR stack was chosen
 
-`scribe.js-ocr` is **AGPL-3.0** and is compiled into the bundle published from
-GitHub Pages, which the repository's BSD-2-Clause claim does not cover.
-`pdfjs-dist` and `tesseract.js` are both **Apache-2.0**, so a second reader was
-built behind the same boundary — `apps/web/src/import/pdf-permissive.ts`,
-selected with `?engine=permissive` — and scored against the incumbent on one
-fixture with everything else held still.
+ReCite used to read PDFs with `scribe.js-ocr`. It is **AGPL-3.0**, and it was
+compiled into the bundle published from GitHub Pages, which the BSD-2-Clause
+this project is licensed under does not cover. So a replacement was built on
+`pdfjs-dist` and `tesseract.js` — both **Apache-2.0** — and the two were scored
+against each other on one fixture with everything else held still.
+
+The first measurement said do not switch:
 
 | engine                    | elapsed | similarity | citation recall |
 | ------------------------- | ------- | ---------- | --------------- |
 | `scribe` (AGPL-3.0)       | 4.9s    | 99.6%      | **100%**        |
 | `permissive` (Apache-2.0) | 2.8s    | 99.2%      | **80%**         |
 
-The permissive stack is roughly **twice as fast** and reads every case citation
-correctly. It loses the statute: `18 U.S.C. §§ 1544, 1546` comes back as
-`18 U.S.C. §8§ 1544, 1546` — a digit invented between the two section symbols,
-which destroys the citation.
+Faster, and it lost the statute. `18 U.S.C. §§ 1544, 1546` came back as
+`§8§ 1544` — a digit invented between the two section symbols. Worse than a
+loss, in fact: the parser reads `§8§ 1544, 1546` as a citation to **section
+8**, an authority the document never cited, reported with no warning. A
+citation checker that invents citations is the exact failure this project
+exists to catch.
 
-Two hypotheses were tested and neither held:
+Two hypotheses were tested and neither held. Running Tesseract's legacy and
+LSTM engines together (OEM 2) rather than the LSTM-only default changed
+nothing. Raising the page render from 300 to 450 DPI made it _worse_ — both
+symbols became `88`, giving `18 U.S.C. 88 1544`, which reads as plausible text
+rather than as damage.
 
-- **Engine mode.** Scribe runs Tesseract's legacy and LSTM engines and
-  reconciles them. Initialising `tesseract.js` with OEM 2 (both engines) rather
-  than the LSTM-only default changed nothing.
-- **Render resolution.** Raising the page render from 300 to 450 DPI made it
-  _worse_: both symbols became `88`, giving `18 U.S.C. 88 1544`, which reads as
-  plausible text rather than as damage.
+What fixed it was domain knowledge rather than tuning.
+`apps/web/src/import/ocr-repair.ts` puts the symbols back, and it can do so
+safely because it fires only between a code abbreviation and a section number,
+and only when a real `§` survived the recognition — which proves the author
+typed one, so a digit inside that run is noise rather than content. It
+deliberately declines the `88` case, where no `§` survived and there is no way
+to tell it from a genuine reference to section 88.
 
-The finding is narrower and more awkward than "it cannot read `§`". On a page
-holding that statute alone, the permissive stack reads `§§ 1544` **correctly**.
-It fails on the denser five-line page. So the section symbol is not reliably
-wrong — it is _unreliable_, which is worse for this use, because there is no
-way to tell from the output which documents it ruined.
+With the repair, the permissive stack matches:
 
-**The swap is therefore not taken.** `§` is not an optional glyph in a Bluebook
-citation checker. The spike is kept rather than deleted: it costs nothing at
-runtime (the two engines are separate lazy chunks, and only the selected one is
-downloaded), it is what a re-evaluation would start from, and `pnpm bench:ocr`
-re-runs the comparison on demand. The licence problem is unresolved and is now
-a labelling decision rather than an engineering one.
+| engine                | elapsed | similarity | citation recall |
+| --------------------- | ------- | ---------- | --------------- |
+| `permissive` + repair | 3.4s    | **99.6%**  | **100%**        |
+
+So `scribe.js-ocr` was removed rather than merely deselected — an AGPL
+dependency that is still bundled is still distributed, whether or not it is
+reachable — and the repository is BSD-2-Clause in fact and not only in the
+`LICENSE` file.
 
 ### What is not tunable
 

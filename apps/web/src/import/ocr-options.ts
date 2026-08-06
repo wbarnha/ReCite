@@ -55,7 +55,7 @@ export const OCR_MODE_HELP: Record<OcrMode, string> = {
 /**
  * How many recognition workers to run.
  *
- * `null` leaves it to Scribe, which takes up to six in a browser. A number
+ * `null` leaves it to the engine's own choice. A number
  * caps it. The reason to cap it is not speed — it is that OCR saturating every
  * core makes the rest of the browser stutter, and a task pane that freezes
  * Word looks like a crash.
@@ -90,18 +90,6 @@ export function workersFromQuery(search: string): WorkerCount {
   const parsed = Number(raw);
   if (!Number.isInteger(parsed) || parsed < 1 || parsed > 16) return null;
   return parsed;
-}
-
-/** Scribe's name for each mode. See its `extractText` docs for the full set. */
-export function scribeOcrPages(mode: OcrMode): "autoShallow" | "all" | "none" {
-  switch (mode) {
-    case "auto":
-      return "autoShallow";
-    case "always":
-      return "all";
-    case "never":
-      return "none";
-  }
 }
 
 /**

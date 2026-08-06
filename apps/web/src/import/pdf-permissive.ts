@@ -29,6 +29,7 @@ import { createWorker, type Worker as TesseractWorker } from "tesseract.js";
 import { TESSDATA_DIR } from "../build-info.js";
 import type { ProgressHandler } from "./index.js";
 import type { OcrSettings } from "./ocr-options.js";
+import { repairSectionSymbols } from "./ocr-repair.js";
 import type { PageExtraction } from "./pdf-engine-result.js";
 
 /**
@@ -198,5 +199,8 @@ async function recognisePage(page: PDFPageProxy): Promise<string> {
   canvas.width = 0;
   canvas.height = 0;
 
-  return data.text;
+  // Only recognised text is repaired. A text layer read straight out of the
+  // PDF is exact, and running a character-rewriting pass over it could only
+  // introduce an error that was not there.
+  return repairSectionSymbols(data.text);
 }

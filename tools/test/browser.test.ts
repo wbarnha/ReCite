@@ -8,10 +8,10 @@
  * - **OCR works.** Not "the code that calls the OCR library is well typed" —
  *   that a scanned page, with no text layer at all, comes back as readable
  *   citations.
- * - **Nothing leaves the origin.** Scribe's default is to fetch language
- *   models from jsDelivr, and the string is still in the bundle because it is
- *   the fallback. The only way to know the override took is to watch the
- *   network.
+ * - **Nothing leaves the origin.** `tesseract.js` defaults to jsDelivr for its
+ *   worker, its WebAssembly core *and* its language model, and those strings
+ *   are still in the bundle because they are the fallbacks. The only way to
+ *   know the overrides took is to watch the network.
  *
  * Skipped when Chromium is not available, so a contributor without it can
  * still run the suite — but CI has it, and CI is where this has to pass.
@@ -288,23 +288,18 @@ describe.skipIf(!runnable)("the published site in a browser", () => {
     await page.close();
   }, 300_000);
 
-  it("reads a scanned page with the permissive engine, asking nobody for help", async () => {
-    // The AGPL spike. `scribe.js-ocr` is AGPL-3.0 and is compiled into the
-    // published bundle; `pdfjs-dist` + `tesseract.js` are Apache-2.0. This
-    // asserts the candidate stack works end to end and stays on this origin —
-    // tesseract.js defaults to jsDelivr for its worker, its WebAssembly core
-    // *and* its language model, three separate ways to leak that someone is
-    // OCRing a document.
-    //
-    // It deliberately does not assert anything comparative. Whether the
-    // permissive stack is accurate *enough* is a measurement, not a boolean,
-    // and it lives in `pnpm bench:ocr` where the answer is a recall figure.
-    // See docs/testing.md for what that measurement currently says.
+  it("reads a scanned statute without inventing a different one", async () => {
+    // The section symbol is the one character Tesseract cannot be trusted
+    // with here: on a dense page it reads `§§ 1544` as `§8§ 1544`, and the
+    // parser then reports a citation to **section 8** — an authority the
+    // document never cited. `import/ocr-repair.ts` puts it back. This is the
+    // end-to-end proof that it does.
     const pdf = await makeScannedPdf(browser, [
       "Griggs v. State Farm Lloyds, 181 F.3d 694 (5th Cir. 1999).",
+      "See also 18 U.S.C. §§ 1544, 1546 (2012).",
     ]);
 
-    const { page } = await open("?engine=permissive");
+    const { page } = await open();
     await page.setInputFiles("input[type=file]", {
       name: "scanned.pdf",
       mimeType: "application/pdf",
@@ -313,6 +308,11 @@ describe.skipIf(!runnable)("the published site in a browser", () => {
     const text = await waitForMatch(page, "textarea", /Griggs/, 300_000);
 
     expect(text).toContain("181 F.3d 694");
+    // The repair fired, or did not need to. Either way no invented section.
+    expect(text).not.toMatch(/§\d§/);
+    expect(text).toContain("1544");
+    // tesseract.js defaults to jsDelivr for its worker, its WebAssembly core
+    // *and* its language model. All three are overridden to this origin.
     expect(offOrigin()).toEqual([]);
     await page.close();
   }, 300_000);

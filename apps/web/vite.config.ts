@@ -65,11 +65,6 @@ export default defineConfig(({ mode }) => ({
   },
   resolve: {
     alias: {
-      // Scribe's Node canvas, which the browser never uses but a bundler
-      // cannot tell is unreachable. See the stub for why.
-      "@scribe.js/canvas": fileURLToPath(
-        new URL("src/import/scribe-canvas-stub.ts", import.meta.url),
-      ),
       "@recite/core": fileURLToPath(
         new URL("../../packages/core/src/index.ts", import.meta.url),
       ),

@@ -31,14 +31,14 @@
  *
  * An earlier design precached the model into Cache Storage. That does nothing:
  * without a service worker the Cache Storage API is never consulted by an
- * ordinary `fetch`, so Scribe's own request would have missed it entirely and
+ * ordinary `fetch`, so the engine's own request would have missed it entirely and
  * downloaded the model a second time. A service worker would fix that and is
  * the wrong trade here — this project's integrity story is checksums, SRI and
  * a footer naming the exact commit running, and a worker serving a stale
  * bundle undercuts all three.
  *
- * A plain `fetch` populates the browser's ordinary HTTP cache, which Scribe's
- * later request *does* consult. That is the whole mechanism.
+ * A plain `fetch` populates the browser's ordinary HTTP cache, which the
+ * engine's later request *does* consult. That is the whole mechanism.
  */
 
 import { TESSDATA_DIR } from "../build-info.js";
@@ -83,8 +83,8 @@ export function warmEngine(): void {
  * Returns the in-flight promise so the reader can await it rather than racing
  * it. That matters: two concurrent requests for the same URL are not reliably
  * coalesced, and a race would mean downloading eleven megabytes twice. The
- * reader awaits this before handing the file to Scribe, by which point it has
- * usually already finished.
+ * reader awaits this before handing the file to the engine, by which point it
+ * has usually already finished.
  */
 export function warmModel(): Promise<void> {
   model ??= fetch(modelUrl(), { cache: "force-cache" })
@@ -95,7 +95,7 @@ export function warmModel(): Promise<void> {
       await response.arrayBuffer();
     })
     .catch(() => {
-      // Let Scribe fetch it the ordinary way and report its own failure.
+      // Let the engine fetch it the ordinary way and report its own failure.
       model = undefined;
     });
   return model;

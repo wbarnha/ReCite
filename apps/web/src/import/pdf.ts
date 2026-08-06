@@ -6,12 +6,15 @@
  * scanner is a stack of photographs, and getting text out means optical
  * character recognition — which is a guess, and sometimes a wrong one.
  *
- * This module is the part that is the same whichever engine does the reading:
- * the session cache, the timings, the accuracy warning, and the choice between
- * `pdf-scribe.ts` and `pdf-permissive.ts`. Keeping it here is what makes the
- * two comparable — both are cached the same way and measured the same way, so
- * `tools/bench/ocr.ts` is scoring the engines rather than their scaffolding.
- * See `engine.ts` for why there are two.
+ * This module holds everything around the reading itself: the session cache,
+ * the timings, and the accuracy warning. `pdf-permissive.ts` does the reading,
+ * with `pdfjs-dist` and `tesseract.js`.
+ *
+ * There used to be a second reader here, on `scribe.js-ocr`. It was removed
+ * when the permissive stack matched it — same 99.6% character similarity, same
+ * 100% citation recall, and faster — because Scribe is AGPL-3.0 and this
+ * project is BSD-2-Clause. See `docs/testing.md` for the measurement and
+ * `ocr-repair.ts` for the one thing that had to be fixed to get there.
  *
  * **The engine is loaded lazily**, from this module, which nothing imports
  * statically. Someone who pastes text or opens a `.docx` never downloads it.
@@ -20,34 +23,11 @@
  */
 
 import { cached, fileKey, remember } from "./cache.js";
-import type { PdfEngine } from "./engine.js";
-import { DEFAULT_PDF_ENGINE } from "./engine.js";
 import type { ImportResult, ProgressHandler } from "./index.js";
 import { ImportTimer } from "./metrics.js";
 import type { OcrSettings } from "./ocr-options.js";
 import { DEFAULT_OCR_SETTINGS } from "./ocr-options.js";
-import type { PageExtraction } from "./pdf-engine-result.js";
 import { warmModel } from "./warmup.js";
-
-/**
- * Load and run one engine.
- *
- * Two separate dynamic imports, never both: a visitor downloads the engine
- * that is going to read their document and not the one that is not.
- */
-async function extract(
-  engine: PdfEngine,
-  file: File,
-  onProgress: ProgressHandler,
-  settings: OcrSettings,
-): Promise<PageExtraction> {
-  if (engine === "permissive") {
-    const { extractPermissive } = await import("./pdf-permissive.js");
-    return extractPermissive(file, onProgress, settings);
-  }
-  const { extractScribe } = await import("./pdf-scribe.js");
-  return extractScribe(file, onProgress, settings);
-}
 
 /**
  * Read a PDF into text.
@@ -60,11 +40,10 @@ export async function readPdf(
   file: File,
   onProgress: ProgressHandler,
   settings: OcrSettings = DEFAULT_OCR_SETTINGS,
-  engine: PdfEngine = DEFAULT_PDF_ENGINE,
 ): Promise<ImportResult> {
   const timer = new ImportTimer();
 
-  const key = await timer.measure("hash", () => fileKey(file, settings, engine));
+  const key = await timer.measure("hash", () => fileKey(file, settings));
   const hit = cached(key);
   if (hit) {
     return {
@@ -90,8 +69,9 @@ export async function readPdf(
 
   onProgress("Reading the PDF…");
 
+  const { extractPermissive } = await import("./pdf-permissive.js");
   const read = await timer.measure("read", () =>
-    extract(engine, file, onProgress, settings),
+    extractPermissive(file, onProgress, settings),
   );
 
   const warnings: string[] = [];
@@ -157,14 +137,8 @@ function normalise(text: string): string {
     .trim();
 }
 
-/** Release whichever engine is holding workers. */
+/** Release the recognition workers. */
 export async function releasePdfEngine(): Promise<void> {
-  const [scribe, permissive] = await Promise.all([
-    import("./pdf-scribe.js"),
-    import("./pdf-permissive.js"),
-  ]);
-  await Promise.all([
-    scribe.releaseScribeEngine(),
-    permissive.releasePermissiveEngine(),
-  ]);
+  const { releasePermissiveEngine } = await import("./pdf-permissive.js");
+  await releasePermissiveEngine();
 }

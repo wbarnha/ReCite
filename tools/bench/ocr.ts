@@ -60,19 +60,9 @@ const SCANNED_LINES = [
 const MODES = ["auto", "always", "never"] as const;
 
 /**
- * The two PDF stacks, and the reason this harness matters.
- *
- * `scribe` is AGPL-3.0 and is what ships; `permissive` is pdfjs-dist plus
- * tesseract.js, both Apache-2.0. The licence argument is settled by whether
- * the second holds citation recall against the first — see
- * `apps/web/src/import/engine.ts`.
- */
-const ENGINES = ["scribe", "permissive"] as const;
-
-/**
  * Worker counts to sweep, under the default mode.
  *
- * `null` is Scribe's own choice — up to six in a browser. The reason to want
+ * `null` leaves it to tesseract.js. The reason to want
  * fewer is not throughput: it is that recognition saturating every core makes
  * the rest of the browser stutter, and a task pane that freezes Word looks
  * like a crash. This sweep is what says how much that costs.
@@ -120,14 +110,7 @@ async function main(): Promise<void> {
 
     const runs: Run[] = [];
 
-    // The comparison the licence question turns on: both engines, one fixture,
-    // one mode, everything else held still.
-    for (const engine of ENGINES) {
-      runs.push(await time(browser, origin, pdf, expected, { mode: "auto", engine }));
-    }
-
     for (const mode of MODES) {
-      if (mode === "auto") continue; // measured above, on both engines
       runs.push(await time(browser, origin, pdf, expected, { mode }));
     }
     // The same file again under the default mode: this is the cache path, and
@@ -156,11 +139,10 @@ async function time(
   options: {
     mode: (typeof MODES)[number];
     workers?: number;
-    engine?: (typeof ENGINES)[number];
     twice?: boolean;
   },
 ): Promise<Run> {
-  const { mode, workers, engine, twice = false } = options;
+  const { mode, workers, twice = false } = options;
   const page = await browser.newPage();
 
   // Every request, so a stack that quietly reaches for a CDN is caught here
@@ -183,7 +165,6 @@ async function time(
   // but not on the toolbar.
   const parameters = new URLSearchParams();
   if (workers !== undefined) parameters.set("workers", String(workers));
-  if (engine !== undefined) parameters.set("engine", engine);
   const query = parameters.size > 0 ? `?${parameters.toString()}` : "";
   await page.goto(`${origin}${BASE_PATH}${query}`, { waitUntil: "networkidle" });
   await page.selectOption("select[aria-label^='When to read text']", mode);
@@ -223,11 +204,9 @@ async function time(
   const accuracy = citationAccuracy(expected, text);
   const label = twice
     ? `${mode} (second open)`
-    : engine !== undefined
-      ? `${engine} engine`
-      : workers === undefined
-        ? mode
-        : `${mode}, ${workers} worker${workers === 1 ? "" : "s"}`;
+    : workers === undefined
+      ? mode
+      : `${mode}, ${workers} worker${workers === 1 ? "" : "s"}`;
 
   return {
     label,

@@ -13,8 +13,6 @@
  * failure.
  */
 
-import type { PdfEngine } from "./engine.js";
-import { DEFAULT_PDF_ENGINE } from "./engine.js";
 import type { ImportMetrics } from "./metrics.js";
 import type { OcrSettings } from "./ocr-options.js";
 import { DEFAULT_OCR_SETTINGS } from "./ocr-options.js";
@@ -112,7 +110,6 @@ export async function importDocument(
   file: File,
   onProgress: ProgressHandler = () => {},
   ocr: OcrSettings = DEFAULT_OCR_SETTINGS,
-  engine: PdfEngine = DEFAULT_PDF_ENGINE,
 ): Promise<ImportResult> {
   if (file.size === 0) {
     throw new UnsupportedFormatError(`${file.name} is empty.`);
@@ -131,7 +128,7 @@ export async function importDocument(
   // --- PDF, by magic number -------------------------------------------
   if (head.startsWith(PDF_MAGIC)) {
     const { readPdf } = await import("./pdf.js");
-    return readPdf(file, onProgress, ocr, engine);
+    return readPdf(file, onProgress, ocr);
   }
 
   // --- ZIP-based office formats ---------------------------------------
