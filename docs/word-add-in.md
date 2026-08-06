@@ -95,6 +95,11 @@ trusted certificate. Generate a local manifest with:
 $ RECITE_BASE_URL=https://localhost:3000/ pnpm manifest
 ```
 
+For desktop Word, the verified debug flow is `pnpm dev` in one terminal and
+`corepack pnpm dlx office-addin-debugging start ./apps/web/dist/manifest.xml desktop`
+in another. That tool registers the add-in under the Office `Wef\\Developer`
+registry path and launches a sideloaded Word document for testing.
+
 Opening `taskpane.html` in an ordinary browser is also supported: it detects
 that Office is not present and explains how to install the add-in rather than
 failing against an API that is not there.
