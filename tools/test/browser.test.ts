@@ -310,29 +310,6 @@ describe.skipIf(!runnable)("the published site in a browser", () => {
     ...Array.from({ length: 60 }, (_, i) => `Paragraph ${i + 62} of the argument.`),
   ].join("\n\n");
 
-  it("reads a blank line back as one blank line", async () => {
-    // An empty paragraph is rendered `<p><br></p>`, because an empty `<p>`
-    // collapses and the caret cannot reach it. Reading that back as *two*
-    // paragraphs put every offset after the first blank line out by one — so
-    // findings painted nothing and a jump landed nowhere, on almost every real
-    // document. Saving as `.txt` is the end-to-end way to ask.
-    const body = "First paragraph.\n\nSecond paragraph.\n\n\nThird.";
-    const { page } = await open();
-    await openDocument(page, body);
-
-    await page.selectOption(".saveas select", "txt");
-    const [download] = await Promise.all([
-      page.waitForEvent("download", { timeout: 20_000 }),
-      page.click(".saveas button"),
-    ]);
-
-    const stream = await download.createReadStream();
-    const chunks: Buffer[] = [];
-    for await (const chunk of stream) chunks.push(chunk as Buffer);
-    expect(Buffer.concat(chunks).toString("utf8")).toBe(body);
-    await page.close();
-  }, 60_000);
-
   it("jumps to the citation when the citation is clicked, in the text box", async () => {
     // Selecting a span is not enough: `setSelectionRange` does not scroll, so
     // a citation below the fold would highlight where nobody can see it and
@@ -430,6 +407,62 @@ describe.skipIf(!runnable)("the published site in a browser", () => {
 
     await page.locator("label:has-text('Edit as plain text') input").uncheck();
     expect(await page.locator(".page").textContent()).toContain("556 U.S. 662");
+    await page.close();
+  }, 60_000);
+
+  it("keeps blank lines when the document goes back out", async () => {
+    // An empty paragraph is rendered `<p><br></p>`, because an empty `<p>`
+    // collapses and the caret cannot reach it. Reading that back as *two*
+    // paragraphs doubled every blank line — so a document saved out of the
+    // editor came back with gaps twice the size, and doubled again each time
+    // it went round.
+    //
+    // The fix has to be exercised through the reader, and opening a file does
+    // not do that: the editor is seeded from the text and hands the same
+    // string straight back to the panels beside it. Applying a fix does — it
+    // reads the page, edits the model and renders it again — so this checks
+    // the thing a user would actually notice, by the route they would take.
+    const { page } = await open();
+    await openDocument(
+      page,
+      "An opening paragraph.\n\nDoe v. Roe, 526 U.S. 795 (U.S. 1999).\n\n\nA closing line.\n",
+    );
+
+    await page.click("button:has-text('Check citations')");
+    await waitForMatch(page, ".status", /finding/i, 20_000);
+    await page.click("button:has-text('Fix')");
+    await waitForMatch(page, ".status", /Applied/i, 20_000);
+
+    await page.selectOption(".saveas select", "txt");
+    const [download] = await Promise.all([
+      page.waitForEvent("download", { timeout: 20_000 }),
+      page.click(".saveas button"),
+    ]);
+    const stream = await download.createReadStream();
+    const chunks: Buffer[] = [];
+    for await (const chunk of stream) chunks.push(chunk as Buffer);
+
+    // The correction applied, and every blank line still exactly one line —
+    // including the one at the end.
+    expect(Buffer.concat(chunks).toString("utf8")).toBe(
+      "An opening paragraph.\n\nDoe v. Roe, 526 U.S. 795 (1999).\n\n\nA closing line.\n",
+    );
+    await page.close();
+  }, 60_000);
+
+  it("marks a finding below a blank line, where the offsets used to slip", async () => {
+    // The visible half of the same bug: one character of drift is enough for
+    // every range below the first blank line to resolve to the wrong text, or
+    // to no text at all — so the findings painted nothing.
+    const { page } = await open();
+    await openDocument(
+      page,
+      "An opening paragraph.\n\nSecond.\n\nDoe v. Roe, 526 U.S. 795 (U.S. 1999).",
+    );
+    await page.click("button:has-text('Check citations')");
+    await waitForMatch(page, ".status", /finding/i, 20_000);
+
+    expect(await page.evaluate("CSS.highlights.size")).toBeGreaterThan(0);
     await page.close();
   }, 60_000);
 
