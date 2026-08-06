@@ -13,6 +13,7 @@
   "references": [
     { "path": "../../packages/core" },
     { "path": "../../packages/rules" },
-    { "path": "../../packages/engine" }
+    { "path": "../../packages/engine" },
+    { "path": "../../packages/courtlistener" }
   ]
 }

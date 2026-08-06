@@ -9,8 +9,11 @@
  * and can only give back a `.txt` has quietly lost the user's format.
  */
 
+import type { DocumentComment } from "./comments.js";
 import { writeDocx, writeOdt } from "./office.js";
 import { writePdf } from "./pdf.js";
+
+export type { DocumentComment } from "./comments.js";
 
 export interface ExportFormat {
   readonly id: string;
@@ -41,14 +44,18 @@ export const EXPORT_FORMATS: readonly ExportFormat[] = [
     label: "Word document",
     extension: ".docx",
     mime: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    note: "Opens in Word. Text only — ReCite never had your formatting.",
+    note:
+      "Opens in Word. Text only — ReCite never had your formatting. Pincite " +
+      "quotations are written in as real comments.",
   },
   {
     id: "odt",
     label: "OpenDocument text",
     extension: ".odt",
     mime: "application/vnd.oasis.opendocument.text",
-    note: "Opens in LibreOffice. Text only.",
+    note:
+      "Opens in LibreOffice. Text only. Pincite quotations are written in as " +
+      "annotations.",
   },
   {
     id: "rtf",
@@ -106,6 +113,19 @@ export interface ReportFinding {
   readonly suggestion?: string;
 }
 
+/** A pincite note, in the shape a saved report needs. */
+export interface ReportAnnotation {
+  readonly citation: string;
+  readonly caseName: string;
+  readonly pinCite?: string;
+  readonly quotation?: string;
+  readonly url?: string;
+  readonly source: string;
+  readonly note?: string;
+  readonly start: number;
+  readonly end: number;
+}
+
 export interface ReportContext {
   readonly documentName: string;
   readonly profile: string;
@@ -122,6 +142,16 @@ export interface ReportContext {
    * re-examined later against the same table rather than whatever is current.
    */
   readonly reporterData: string;
+  /**
+   * How citations were verified, in words a reader can act on.
+   *
+   * A finding of "absent" means something very different when the reference
+   * was five cases someone pasted than when it was CourtListener, so the
+   * report says which — otherwise the same JSON means two different things.
+   */
+  readonly authority?: string;
+  /** Pincite quotations pulled for this document, if any. */
+  readonly annotations?: readonly ReportAnnotation[];
 }
 
 // ------------------------------------------------------------- documents ---
@@ -204,8 +234,10 @@ function reportJson(context: ReportContext): string {
       reporterData: context.reporterData,
       document: context.documentName,
       bluebook: context.profile,
+      ...(context.authority ? { authority: context.authority } : {}),
       citations: context.citationCount,
       findings: context.findings,
+      ...(context.annotations?.length ? { annotations: context.annotations } : {}),
     },
     null,
     2,
@@ -230,6 +262,21 @@ function reportCsv(context: ReportContext): string {
       finding.message,
       finding.suggestion ?? "",
     ]),
+    // Quotations ride in the same file under a rule id of their own rather
+    // than in a second download. A spreadsheet can filter a column; nobody
+    // wants to reconcile two exports by hand.
+    ...(context.annotations ?? []).map((annotation) => [
+      "PIN",
+      "pincite-quotation",
+      "info",
+      annotation.citation,
+      String(annotation.start),
+      String(annotation.end),
+      annotation.quotation
+        ? `${annotation.caseName}, at ${annotation.pinCite ?? "?"}: ${annotation.quotation}`
+        : (annotation.note ?? `${annotation.caseName} — no quotation`),
+      annotation.url ?? "",
+    ]),
   ];
   return `${rows.map((row) => row.map(csvField).join(",")).join("\n")}\n`;
 }
@@ -243,6 +290,7 @@ function reportMarkdown(context: ReportContext): string {
     `- **Findings:** ${context.findings.length}`,
     `- **ReCite:** ${context.version} (commit ${context.commit})`,
     `- **Reporter data:** freelawproject/reporters-db ${context.reporterData}`,
+    ...(context.authority ? [`- **Authority check:** ${context.authority}`] : []),
     "",
   ];
 
@@ -263,6 +311,26 @@ function reportMarkdown(context: ReportContext): string {
     lines.push("");
   }
 
+  if (context.annotations?.length) {
+    lines.push("## Pincite quotations", "");
+    for (const annotation of context.annotations) {
+      lines.push(
+        `### ${annotation.citation}${annotation.pinCite ? `, at ${annotation.pinCite}` : ""}`,
+        "",
+        `*${annotation.caseName}*${annotation.url ? ` — <${annotation.url}>` : ""}`,
+        "",
+      );
+      if (annotation.quotation) lines.push(`> ${annotation.quotation}`, "");
+      if (annotation.note) lines.push(annotation.note, "");
+    }
+    lines.push(
+      "A quotation is evidence to check, not a substitute for reading the",
+      "opinion. Retrieved from " +
+        `${context.annotations[0]?.source ?? "the authority source"}.`,
+      "",
+    );
+  }
+
   return `${lines.join("\n")}\n`;
 }
 
@@ -272,17 +340,26 @@ export function isReport(format: ExportFormat): boolean {
   return format.id.startsWith("report.");
 }
 
-/** Build the bytes for one format. */
+/**
+ * Build the bytes for one format.
+ *
+ * `comments` are written into the formats that have a concept of one —
+ * `.docx` and `.odt`. Everything else ignores them rather than inventing a
+ * representation: a footnote bolted onto a plain-text file changes the
+ * document, and the user asked to save their document, not a marked-up copy
+ * of it. What each format does with them is stated in the `Save as` note.
+ */
 export async function buildExport(
   format: ExportFormat,
   text: string,
   context: ReportContext,
+  comments: readonly DocumentComment[] = [],
 ): Promise<Blob> {
   switch (format.id) {
     case "docx":
-      return writeDocx(text);
+      return writeDocx(text, comments);
     case "odt":
-      return writeOdt(text);
+      return writeOdt(text, comments);
     case "pdf":
       return writePdf(text);
     case "rtf":

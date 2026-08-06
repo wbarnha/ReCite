@@ -164,6 +164,39 @@ describe.skipIf(!runnable)("the published site in a browser", () => {
     await page.close();
   }, 60_000);
 
+  it("offers a way to verify cases exist, and starts with it switched off", async () => {
+    // The control that decides whether a fabrication can be caught at all.
+    // Its default matters as much as its presence: `courtlistener` selected
+    // by accident would be a connection nobody asked for.
+    const { page } = await open();
+    const picker = page.locator("select[aria-label^='Where to check']");
+
+    expect(await picker.inputValue()).toBe("none");
+    const options = await picker.locator("option").allTextContents();
+    expect(options.join(" ")).toContain("CourtListener");
+
+    // Choosing it changes nothing on the wire until a token is supplied.
+    await picker.selectOption("courtlistener");
+    await page.click("button:has-text('Check citations')").catch(() => undefined);
+    expect(offOrigin()).toEqual([]);
+    await page.close();
+  }, 60_000);
+
+  it("asks CourtListener nothing without a token", async () => {
+    // The claim the whole feature rests on: the client refuses to exist
+    // without a credential, so the untouched application is silent. Watched
+    // rather than asserted about the source, because that is the only way to
+    // know it is true of the built bundle.
+    const { page } = await open();
+    await page.fill("textarea", "Varghese, 925 F.3d 1339 (11th Cir. 2019).");
+    await page.selectOption("select[aria-label^='Where to check']", "courtlistener");
+    await page.click("button:has-text('Check citations')");
+    await waitForMatch(page, ".status", /citation/i, 20_000);
+
+    expect(offOrigin()).toEqual([]);
+    await page.close();
+  }, 60_000);
+
   it("opens a .txt file by drag-and-drop target", async () => {
     const { page } = await open();
     await page.setInputFiles("input[type=file]", {

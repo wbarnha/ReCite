@@ -452,3 +452,132 @@ select {
 .build-line {
   font-variant-numeric: tabular-nums;
 }
+
+/* ------------------------------------------------------------ authority --- */
+
+.authority {
+  margin-bottom: 0.75rem;
+}
+
+.authority .toolbar {
+  margin-bottom: 0.4rem;
+}
+
+.authority select {
+  flex: 1 1 14rem;
+  max-width: 22rem;
+}
+
+.authority .notice p {
+  margin: 0 0 0.5rem;
+}
+
+.authority .notice p:last-child {
+  margin-bottom: 0;
+}
+
+/* The one control in ReCite that opens a connection, marked as such. */
+.authority-online {
+  border-left: 3px solid var(--accent);
+}
+
+.authority-token {
+  display: block;
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.authority-token input {
+  display: block;
+  width: 100%;
+  margin-top: 0.25rem;
+  padding: 0.35rem 0.45rem;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 400;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+/* ---------------------------------------------------------- annotations --- */
+
+.annotations {
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line);
+}
+
+.annotations h3 {
+  font-size: 0.9rem;
+  margin: 0 0 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.annotations-note {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin: 0 0 0.6rem;
+}
+
+.annotation {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--safe);
+  border-radius: 8px;
+  padding: 0.6rem 0.75rem;
+  margin-bottom: 0.5rem;
+  background: var(--surface);
+}
+
+/* A pin cite ReCite could not reach is shown, not hidden: a reader who saw
+   only the quoted ones would believe every page had been checked. */
+.annotation.unquoted {
+  border-left-color: var(--warning);
+}
+
+.annotation header {
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin-bottom: 0.3rem;
+}
+
+.annotation .cite {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--fg);
+}
+
+.annotation-case {
+  margin: 0 0 0.35rem;
+  font-size: 0.85rem;
+  font-style: italic;
+}
+
+.annotation blockquote {
+  margin: 0;
+  padding-left: 0.7rem;
+  border-left: 2px solid var(--line);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.annotation-missing {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--warning);
+}
+
+.annotation .actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+}

@@ -148,18 +148,23 @@ linearly. A brief with a few thousand citations is not unusual.
 
 ### Added: a Content Security Policy
 
-Both pages carry a restrictive CSP. `connect-src 'none'` is the one that
-matters: the app has no server, so nothing should ever open a connection, and
-a bug or a compromised dependency cannot quietly post a client's document
-somewhere.
+Both pages carry a restrictive CSP. `connect-src` is the directive that
+matters, and it has been narrowed and then deliberately widened once, which is
+worth recording in that order.
 
-`connect-src` differs between the two pages, and the web app's is the weaker
-of the two. It is `'self'` rather than `'none'` because reading a scanned PDF
-means running an OCR engine, and a WebAssembly engine has to be fetched before
-it can run. What survives the change is the part that matters: the browser
-still refuses **every cross-origin request**, so document text cannot leave the
-machine. The Word task pane keeps `connect-src 'none'`, because Word hands it
-the document and it has nothing to load.
+It began as `connect-src 'none'` on both pages: the app had no server, so
+nothing should ever open a connection, and a bug or a compromised dependency
+could not quietly post a client's document somewhere.
+
+It became `'self'` in the web app when in-browser OCR arrived, because a
+WebAssembly engine has to be fetched before it can run. The guarantee survived
+intact — the browser still refused **every cross-origin request**.
+
+It is now `'self' https://www.courtlistener.com` in the web app and
+`https://www.courtlistener.com` in the task pane, and that guarantee no longer
+holds in its strong form. See [What the CourtListener check
+costs](#what-the-courtlistener-check-costs) below, which states the trade-off
+rather than burying it.
 
 The OCR engine and its language model are published beside the application
 rather than fetched. Tesseract.js defaults to jsDelivr for its worker, its
@@ -209,10 +214,11 @@ minimum Pages needs.
   escape. A citation containing `<script>` is displayed as text. `react/no-danger`
   is now an error, so re-introducing one is a build failure rather than a
   review question.
-- **No network calls and no storage.** No `fetch`, no `XMLHttpRequest`, no
-  `localStorage`, no cookies. Document text never leaves the page. The only
-  external request in the whole application is Office.js, which Office
-  requires be loaded from Microsoft.
+- **No storage, and no unaccounted network calls.** No `XMLHttpRequest`, no
+  `localStorage`, no cookies, no IndexedDB. Every `fetch` call site in the
+  shipped source is enumerated in `tools/test/privacy-claims.test.ts` with a
+  written justification, and a new one fails the suite. Document text never
+  leaves the page.
 - **Other backtracking shapes.** Long space runs, unclosed parentheses, deep
   nesting, digit and dash storms, and repeated partial reporter prefixes were
   all measured. All are linear and finish in milliseconds; each is pinned by
@@ -221,7 +227,8 @@ minimum Pages needs.
   `--frozen-lockfile`. The packages have no runtime dependencies at all; React
   and Vite are confined to the app.
 - **Word permissions.** The manifest asks for `ReadWriteDocument`, which is
-  what reading citations and applying a fix requires, and nothing more.
+  what reading citations, applying a fix and inserting a comment requires, and
+  nothing more.
 
 ## Linting
 
@@ -279,9 +286,13 @@ Everything else the file import handles — `.docx`, `.odt`, `.rtf`, `.html` —
 is parsed with no dependency at all. The office formats are ZIP archives, and
 the browser has had an inflate built in for years (`DecompressionStream`);
 taking a ZIP library for that would have meant adding a dependency to the code
-path that reads a client's document. The three published packages — `core`, `rules`, `engine` —
-have none at all, which is why a rule cannot reach the network: nothing in its
-scope can.
+path that reads a client's document. The four published packages — `core`,
+`rules`, `engine` and `courtlistener` — have none at all.
+
+The dependency graph is load-bearing here, not decorative. `rules` depends on
+`core`; it does not depend on `courtlistener`, which is a sibling. So a rule
+still cannot reach the network — nothing in its scope can — even though the
+workspace now contains something that can.
 
 CI audits at two thresholds on every commit. What ships is audited at `low`,
 because anything there is a vulnerability in the product. The toolchain is
@@ -295,19 +306,72 @@ Microsoft's CDN and which therefore cannot carry Subresource Integrity. It
 loads only in the Word task pane. The web app's policy does not permit that
 origin at all, so the page cannot reach Microsoft even if something tried.
 
-## The one request the application makes
+## Every request the application can make
 
-The app fetches exactly one thing at runtime, and only when asked: the example
-filing published with it, when someone presses **Try the example filing**. The
-URL is built from `document.baseURI`, so it can only resolve to this origin,
-and `connect-src 'self'` means the browser would refuse it otherwise.
+There are three, and each one is pinned by a test that fails if a fourth
+appears. That is deliberately annoying: adding one should require an argument,
+not a commit.
 
-`tools/test/privacy-claims.test.ts` pins the call site — a second `fetch`
-anywhere in the shipped source fails the test. That is deliberately annoying:
-adding one should require an argument, not a commit.
+**Same-origin, and only when asked:**
+
+- the **example filing**, when someone presses _Try the example filing_
+- the **OCR engine and language model**, when someone opens a PDF
+
+Both build their URL from `document.baseURI`, so neither can resolve anywhere
+but this origin, and `tools/test/privacy-claims.test.ts` asserts that no
+absolute URL appears in either file.
+
+**Off-origin, and only with a credential:**
+
+- **CourtListener**, when the user has pasted an API token
+
+The client refuses to be constructed without one, so the default state of the
+application makes no external request at all — which the browser test verifies
+by intercepting every request on a page load and asserting the list is empty.
+What the request contains is a volume, a reporter abbreviation and a page,
+built by a three-line function that takes those three things as its arguments.
+The privacy test reads that function's source and fails if it grows a fourth
+key.
+
+The host itself is written down in exactly one file
+(`packages/courtlistener/src/http.ts`) and a test fails if a second file names
+it, so there is one place to look and one place to change.
 
 Saving a document involves no request at all. The file is built in the page and
 handed to the browser as an object URL.
+
+## What the CourtListener check costs
+
+Stated plainly, because a security document that only lists strengths is not
+useful.
+
+The claim used to be that **the browser would refuse any cross-origin request
+at all**, on both surfaces. That is no longer true. A compromised bundle, or a
+compromised dependency, could now reach one external host — and "but the
+feature is opt-in" does not answer that, because an attacker who controls the
+bundle controls whether it is opt-in.
+
+What survives is narrower, and is still enforced by the browser rather than by
+us:
+
+- **Two origins, named.** `connect-src` contains no wildcard and no third host,
+  on either page. A test asserts the exact directive rather than a pattern.
+- **The task pane cannot reach even its own origin.** `'self'` is absent from
+  its policy, so a bundled bug has no same-origin endpoint to post to either.
+- **No credential, no client.** `CourtListenerClient` throws when constructed
+  without a token, so the untouched application opens nothing.
+- **Responses cannot redirect the next request.** Opinion URLs arrive from the
+  network; each is checked against the fixed origin and a path shape before it
+  is followed.
+- **The token is never persisted and never printed.** It lives in the tab's
+  memory, and `redact()` runs over every error message the client raises —
+  because errors end up in status lines and public issue reports.
+
+A firm whose policy forbids any egress from a tool touching client work should
+leave the feature off and can verify that nothing is sent by watching the
+network panel. `docs/compliance.md` answers the same question in the language a
+vendor assessment uses, and `docs/courtlistener.md` documents the integration
+in full.
 
 ## Reporting a problem
 

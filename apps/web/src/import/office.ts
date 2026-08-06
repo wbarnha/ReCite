@@ -89,7 +89,12 @@ export function textFromOdt(xml: string): string {
 
       case "close":
         if (ODT_SKIPPED.has(node.name)) suppressed = Math.max(0, suppressed - 1);
-        else if (PARAGRAPH.has(node.name)) out.push("\n");
+        // Suppression has to hold on the way out too. A comment body is a
+        // `<text:p>` inside `<office:annotation>`, so closing it used to push
+        // a newline into the middle of the paragraph the comment was attached
+        // to — silently splitting a citation in a document ReCite had itself
+        // annotated.
+        else if (suppressed === 0 && PARAGRAPH.has(node.name)) out.push("\n");
         break;
 
       case "self-closing":

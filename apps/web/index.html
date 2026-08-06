@@ -4,10 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <!--
-      No script, style, image or connection may come from anywhere but this
-      origin and Microsoft's Office CDN. The page never contacts a server of
-      its own, so `connect-src` is closed entirely; a bug or a compromised
-      dependency cannot quietly post the document somewhere.
+      No script, style, image or connection may come from anywhere this policy
+      does not name. The list is short and every entry has to be argued for,
+      because it is the browser rather than a promise that enforces what this
+      page can reach.
 
       `frame-ancestors` is deliberately absent: it is ignored when delivered in
       a meta element, so including it would only log an error. Framing has to
@@ -21,19 +21,31 @@
       have permitted a request this page never makes, which is the difference
       between a privacy claim that is true and one the browser enforces.
 
-      `connect-src 'self'` and not 'none', which the task pane still uses.
-      Reading a scanned PDF means running an OCR engine, and a WebAssembly
-      engine has to be fetched before it can run. Restricting it to this origin
-      keeps the guarantee that matters — the browser will still refuse any
-      cross-origin request, so document text cannot leave — while allowing the
-      app to load its own code. The OCR language models are published beside
-      the app for the same reason: Scribe's default is to pull them from a CDN,
-      which would have put a third party in the path of a document check.
-      See docs/security.md.
+      `connect-src` names exactly two origins, and it is worth being precise
+      about what that does and does not buy.
+
+      `'self'` is here because reading a scanned PDF means running an OCR
+      engine, and a WebAssembly engine has to be fetched before it can run. The
+      language models are published beside the app for the same reason:
+      tesseract.js defaults to a CDN, which would have put a third party in the
+      path of a document check.
+
+      `https://www.courtlistener.com` is here because ReCite can now check that
+      a cited case exists, and read the page a pin cite points at, against the
+      Free Law Project's collection. That feature is off until the user pastes
+      an API token, and what it sends is a volume, a reporter and a page — the
+      request bodies are built in `packages/courtlistener/src/lookup.ts`, which
+      is short on purpose and has no branch that could include document text.
+
+      What this policy still guarantees is the part worth having: those are the
+      only two hosts this page can reach at all. It no longer guarantees that
+      *nothing* can leave, and saying otherwise would be untrue. A firm that
+      needs the stronger property should read docs/compliance.md, which states
+      the change plainly rather than burying it. See also docs/security.md.
     -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; form-action 'none'; base-uri 'none'"
+      content="default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://www.courtlistener.com; form-action 'none'; base-uri 'none'"
     />
     <title>ReCite — find and fix broken case law citations</title>
     <meta

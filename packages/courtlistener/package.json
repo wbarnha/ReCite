@@ -1,0 +1,29 @@
+{
+  "name": "@recite/courtlistener",
+  "version": "1.0.0",
+  "description": "Verify citations and pull pincite quotations from the CourtListener API.",
+  "license": "BSD-2-Clause",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "rm -rf dist *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@recite/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@recite/engine": "workspace:*"
+  },
+  "sideEffects": false
+}

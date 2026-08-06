@@ -10,6 +10,8 @@
 import type { Correction } from "@recite/core";
 import { applyCorrections } from "@recite/core";
 
+import type { DocumentComment } from "./export/index.js";
+
 export interface ApplyOutcome {
   readonly applied: number;
   readonly skipped: number;
@@ -25,6 +27,15 @@ export interface DocumentHost {
   apply(text: string, corrections: readonly Correction[]): Promise<ApplyOutcome>;
   /** Draw the user's attention to a span. Optional; Word can, a textarea can too. */
   reveal?(text: string, start: number, end: number): Promise<void>;
+  /**
+   * Write notes into the document as comments.
+   *
+   * Optional because not every host has somewhere to put one. Word does, and
+   * that is the whole point of doing it there rather than in a report beside
+   * the file. A plain textarea does not, so the web app carries its comments
+   * into the saved `.docx` or `.odt` instead — see `export/comments.ts`.
+   */
+  annotate?(text: string, comments: readonly DocumentComment[]): Promise<ApplyOutcome>;
 }
 
 // ------------------------------------------------------------------ browser --
@@ -147,6 +158,81 @@ export class WordHost implements DocumentHost {
       target.select();
       await context.sync();
     });
+  }
+
+  /**
+   * Attach each note to its citation as a real Word comment.
+   *
+   * The same "find the Nth occurrence" manoeuvre a correction uses, for the
+   * same reason: Office.js has no character offsets, and the same citation
+   * often appears more than once.
+   *
+   * A comment is not an edit — it does not change a word of the document —
+   * which is why it can be written on a check rather than held behind the
+   * review gate that governs fixes.
+   */
+  async annotate(
+    text: string,
+    comments: readonly DocumentComment[],
+  ): Promise<ApplyOutcome> {
+    if (!WordHost.supportsComments()) {
+      throw new Error(
+        "This version of Word cannot add comments from an add-in (it needs the " +
+          "WordApi 1.4 requirement set). Save the document from the web app " +
+          "instead — the comments are written into the .docx.",
+      );
+    }
+
+    const edits = comments
+      .map((comment) => ({
+        needle: text.slice(comment.span.start, comment.span.end),
+        body: comment.text,
+        occurrence: countBefore(
+          text,
+          text.slice(comment.span.start, comment.span.end),
+          comment.span.start,
+        ),
+      }))
+      .filter((edit) => edit.needle.length > 0 && edit.needle.length <= 255);
+
+    let applied = 0;
+
+    await Word.run(async (context) => {
+      for (const edit of edits) {
+        const results = context.document.body.search(edit.needle, {
+          matchCase: true,
+          ignorePunct: false,
+          ignoreSpace: false,
+        });
+        results.load("items");
+        await context.sync();
+
+        const target = results.items[edit.occurrence];
+        if (!target) continue;
+
+        target.insertComment(edit.body);
+        applied++;
+        await context.sync();
+      }
+    });
+
+    return { applied, skipped: comments.length - applied };
+  }
+
+  /**
+   * Whether this Word can be told to insert a comment.
+   *
+   * Comments arrived in the WordApi 1.4 requirement set. Older builds — and
+   * Word on the web in some tenants — simply do not have the call, and finding
+   * that out by watching it throw halfway through a document is worse than
+   * being told up front.
+   */
+  static supportsComments(): boolean {
+    try {
+      return Office.context.requirements.isSetSupported("WordApi", "1.4");
+    } catch {
+      return false;
+    }
   }
 }
 

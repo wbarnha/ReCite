@@ -10,6 +10,8 @@
 import { StrictMode, useMemo } from "react";
 import { createRoot } from "react-dom/client";
 
+import { Annotations } from "./components/Annotations.js";
+import { AuthorityPicker } from "./components/AuthorityPicker.js";
 import { Findings } from "./components/Findings.js";
 import { Footer } from "./components/Footer.js";
 import { ProfilePicker } from "./components/ProfilePicker.js";
@@ -35,8 +37,10 @@ function TaskPane() {
         confidentiality obligation is engaged.
       */}
       <div className="notice">
-        This document stays on your machine. Checking runs inside Word; nothing is
-        uploaded.{" "}
+        This document stays on your machine. Checking runs inside Word; the text is
+        never uploaded. Supplying a CourtListener token below lets ReCite ask that one
+        service whether each cited case exists — it sends a volume, a reporter and a
+        page, and nothing else.{" "}
         <a href="./privacy.html" target="_blank" rel="noreferrer">
           Details
         </a>
@@ -58,12 +62,30 @@ function TaskPane() {
         >
           Fix {recite.fixableCount || ""}
         </button>
+        <button
+          type="button"
+          onClick={() => void recite.annotate()}
+          disabled={recite.busy || !recite.canAnnotate}
+          title="Read the page each pin cite points at, and add it as a Word comment"
+        >
+          Comment pincites
+        </button>
       </div>
 
       <ProfilePicker
         profile={recite.profile}
         onEdition={recite.setEdition}
         onStyle={recite.setStyle}
+        disabled={recite.busy}
+      />
+
+      <AuthorityPicker
+        source={recite.authoritySource}
+        onSource={recite.setAuthoritySource}
+        token={recite.token}
+        onToken={recite.setToken}
+        tokenUsable={recite.tokenUsable}
+        hasCorpus={recite.hasCorpus}
         disabled={recite.busy}
       />
 
@@ -89,6 +111,13 @@ function TaskPane() {
         checked={recite.result !== null}
         onReveal={recite.reveal}
         onApply={(diagnostic) => void recite.applyOne(diagnostic)}
+      />
+
+      <Annotations
+        annotations={recite.annotations}
+        notices={recite.notices}
+        onReveal={recite.reveal}
+        destination="Written into the document as Word comments, next to the citation each one is about."
       />
 
       <Footer compact />

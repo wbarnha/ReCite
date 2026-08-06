@@ -26,6 +26,7 @@ export default defineConfig({
       "@recite/core": src("core"),
       "@recite/rules": src("rules"),
       "@recite/engine": src("engine"),
+      "@recite/courtlistener": src("courtlistener"),
     },
   },
   test: {

@@ -3,6 +3,8 @@
 import { StrictMode, useCallback, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 
+import { Annotations } from "./components/Annotations.js";
+import { AuthorityPicker } from "./components/AuthorityPicker.js";
 import { FileDrop } from "./components/FileDrop.js";
 import { Findings } from "./components/Findings.js";
 import { Footer } from "./components/Footer.js";
@@ -10,6 +12,7 @@ import { SaveAs } from "./components/SaveAs.js";
 import { OcrPicker } from "./components/OcrPicker.js";
 import { ProfilePicker } from "./components/ProfilePicker.js";
 import { BUILD_INFO, SHORT_COMMIT } from "./build-info.js";
+import { AUTHORITY_PROVENANCE } from "./authority.js";
 import { BrowserHost } from "./host.js";
 import type { ImportResult } from "./import/index.js";
 import type { OcrMode, OcrSettings } from "./import/ocr-options.js";
@@ -89,8 +92,26 @@ function WebApp() {
       version: BUILD_INFO.version,
       commit: SHORT_COMMIT,
       reporterData: UPSTREAM_REVISION,
+      authority: AUTHORITY_PROVENANCE[recite.authoritySource],
+      annotations: recite.annotations.map((annotation) => ({
+        citation: annotation.citation,
+        caseName: annotation.caseName,
+        ...(annotation.pinCite ? { pinCite: annotation.pinCite } : {}),
+        ...(annotation.quotation ? { quotation: annotation.quotation } : {}),
+        ...(annotation.url ? { url: annotation.url } : {}),
+        source: annotation.source,
+        ...(annotation.note ? { note: annotation.note } : {}),
+        start: annotation.span.start,
+        end: annotation.span.end,
+      })),
     }),
-    [imported, recite.profile, recite.result],
+    [
+      imported,
+      recite.annotations,
+      recite.authoritySource,
+      recite.profile,
+      recite.result,
+    ],
   );
 
   return (
@@ -103,10 +124,19 @@ function WebApp() {
       </header>
 
       <div className="notice">
-        Nothing you open or paste leaves this page. Reading the file, the OCR for
-        scanned PDFs, the rule set and the authority check all run in your browser.
-        There is no server — your browser is configured to refuse any request this app
-        makes to another origin. <a href="./privacy.html">How this is enforced</a>
+        <p>
+          <strong>Your document does not leave this page.</strong> Reading the file, the
+          OCR for scanned PDFs and the whole rule set run in your browser. There is no
+          ReCite server, and your browser is configured to refuse a request to anywhere
+          but this app&rsquo;s own address — with one exception, below.
+        </p>
+        <p>
+          If you supply a <strong>CourtListener</strong> token, ReCite asks that one
+          service whether each cited case exists, and can read the page a pin cite
+          points at. What it sends is a volume, a reporter and a page — never your text.
+          It is off until you turn it on.{" "}
+          <a href="./privacy.html">How both claims are enforced</a>
+        </p>
       </div>
 
       <div className="columns">
@@ -197,6 +227,14 @@ function WebApp() {
             >
               Fix {recite.fixableCount || ""}
             </button>
+            <button
+              type="button"
+              onClick={() => void recite.annotate()}
+              disabled={recite.busy || !recite.canAnnotate}
+              title="Read the page each pin cite points at, and keep it as a comment"
+            >
+              Pull pincites
+            </button>
             <button type="button" onClick={loadSample} disabled={recite.busy}>
               Load sample
             </button>
@@ -214,7 +252,12 @@ function WebApp() {
             {recite.status}
           </div>
 
-          <SaveAs text={draft} context={reportContext} disabled={recite.busy} />
+          <SaveAs
+            text={draft}
+            context={reportContext}
+            comments={recite.comments}
+            disabled={recite.busy}
+          />
         </section>
 
         <section>
@@ -225,23 +268,15 @@ function WebApp() {
             onStyle={recite.setStyle}
             disabled={recite.busy}
           />
-          <div className="toolbar">
-            <label className="checkbox">
-              <input
-                type="checkbox"
-                checked={recite.useCorpus}
-                onChange={(event) => recite.setUseCorpus(event.target.checked)}
-              />
-              Also check against the sample authority list (5 cases)
-            </label>
-          </div>
-          {recite.useCorpus && (
-            <div className="notice">
-              The sample list holds five cases, so most citations in any real document
-              will be missing from it. That is a prompt to check one by hand — not
-              evidence a case does not exist.
-            </div>
-          )}
+          <AuthorityPicker
+            source={recite.authoritySource}
+            onSource={recite.setAuthoritySource}
+            token={recite.token}
+            onToken={recite.setToken}
+            tokenUsable={recite.tokenUsable}
+            hasCorpus={recite.hasCorpus}
+            disabled={recite.busy}
+          />
           <Findings
             text={recite.result?.text ?? draft}
             diagnostics={recite.result?.diagnostics ?? []}
@@ -249,6 +284,13 @@ function WebApp() {
             checked={recite.result !== null}
             onReveal={recite.reveal}
             onApply={(diagnostic) => void recite.applyOne(diagnostic)}
+          />
+
+          <Annotations
+            annotations={recite.annotations}
+            notices={recite.notices}
+            onReveal={recite.reveal}
+            destination="Saved into the file as real comments when you choose Word or OpenDocument under Save as."
           />
         </section>
       </div>
