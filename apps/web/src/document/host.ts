@@ -25,6 +25,8 @@ export interface EditorHandle {
   apply(corrections: readonly Correction[]): ApplyOutcome;
   /** `expected` is the text those offsets covered when the check ran. */
   reveal(start: number, end: number, expected?: string): RevealOutcome;
+  /** What the user has selected, for prefilling a report. */
+  selection(): string;
 }
 
 export class EditorHost implements DocumentHost {
@@ -57,6 +59,10 @@ export class EditorHost implements DocumentHost {
    * by a different route. Implementing `annotate` to do nothing would put a
    * sentence in the status line that was not true.
    */
+  selection(): Promise<string> {
+    return Promise.resolve(this.handle()?.selection() ?? "");
+  }
+
   reveal(text: string, start: number, end: number): Promise<RevealOutcome> {
     return Promise.resolve(
       this.handle()?.reveal(start, end, text.slice(start, end)) ?? {

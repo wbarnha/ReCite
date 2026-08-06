@@ -30,6 +30,29 @@ Subresource Integrity.
 in the pull request where the abbreviation and the dates came from, so the next
 person can check them.
 
+## Reports from users
+
+The app composes them: every finding has a **Report** link, and there is one
+for citations no rule fired on. They arrive as issues labelled
+`citation report`, and they already contain what you would otherwise have to
+ask for — the citation as written, the rule and its message, the Bluebook
+edition and rule set, what the cases were checked against, whether OCR was
+involved, and the commit.
+
+Two things are worth knowing when you read one.
+
+**Check the OCR line first.** It is at the top for a reason: on a scanned
+document the likeliest explanation of a wrong finding is not a rule bug but a
+misread character, because optical character recognition confuses `1` for `l`
+and `5` for `S` and those are what citations are made of.
+
+**The excerpt is deliberately thin.** A report carries the citation and, only
+if the reporter ticked the box, the sentence around it — capped at
+`MAX_CONTEXT` in `apps/web/src/feedback/report.ts`. If you need more, ask for
+the _shape_ of the surrounding text rather than the text: these come out of
+documents that are frequently privileged, and the reporter is trusting that
+constraint. `apps/web/test/report.test.ts` holds it.
+
 ## Adding a rule
 
 1. Add it to the right family module in `packages/rules/src/`.

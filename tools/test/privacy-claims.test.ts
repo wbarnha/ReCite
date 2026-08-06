@@ -156,6 +156,49 @@ describe("nothing in the shipped code can transmit or persist", () => {
     expect(source).not.toMatch(/https?:\/\//);
   });
 
+  /**
+   * Every way a piece of a document can leave the page that is not a request.
+   *
+   * A bug report carries a citation out of a brief on purpose, so the question
+   * is not whether it leaves but whether the person holding the document
+   * decided that it should. Pinned to one file for the same reason the fetch
+   * sites are: adding another way out should cost a paragraph.
+   */
+  const EGRESS: ReadonlyArray<readonly [string, RegExp]> = [
+    ["the clipboard", /navigator\s*\.\s*clipboard/],
+    ["a new browser window", /window\s*\.\s*open\s*\(|openBrowserWindow/],
+  ];
+
+  it.each(EGRESS)("%s is reachable from one file only", (_name, pattern) => {
+    const users = SHIPPED.filter(([, contents]) => pattern.test(contents)).map(
+      ([path]) => path,
+    );
+    expect(users).toEqual(["apps/web/src/feedback/deliver.ts"]);
+  });
+
+  it("composes a report without transmitting it", () => {
+    // The report module builds text. It has no way to send anything, which is
+    // what makes "nothing has been sent, and nothing will be without you" a
+    // property of the code rather than a sentence in a dialog.
+    const report =
+      SHIPPED.find(([path]) => path === "apps/web/src/feedback/report.ts")?.[1] ?? "";
+    expect(report).not.toBe("");
+    for (const [, pattern] of EGRESS) expect(report).not.toMatch(pattern);
+    expect(report).not.toMatch(/\bfetch\s*\(/);
+  });
+
+  it("bounds what a report may carry out of a document", () => {
+    // A report goes to a public tracker out of a document that may be
+    // privileged. The excerpt around a citation is capped, and the cap is a
+    // number in the source rather than a habit — `apps/web/test/report.test.ts`
+    // holds the behaviour.
+    const report =
+      SHIPPED.find(([path]) => path === "apps/web/src/feedback/report.ts")?.[1] ?? "";
+    const cap = /export const MAX_CONTEXT = (\d+)/.exec(report)?.[1];
+    expect(Number(cap)).toBeGreaterThan(0);
+    expect(Number(cap)).toBeLessThanOrEqual(1000);
+  });
+
   it("hard-codes the only external host it can reach, in one place", () => {
     const hosts = SHIPPED.filter(([, contents]) =>
       /https:\/\/www\.courtlistener\.com/.test(contents),

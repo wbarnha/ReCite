@@ -357,9 +357,45 @@ const support: Page = {
   lede: `ReCite is a free, open-source project. Support is through its public
     issue tracker, where questions and answers stay visible to everyone.`,
   body: `
+    <h2>Reporting a citation ReCite got wrong</h2>
+    <p>
+      This is the most useful thing you can send us, and there is a
+      <strong>Report</strong> link on every finding for it. There is also one
+      under the list, for the other kind of mistake — a citation that is wrong
+      and which ReCite said nothing about. That one is rarer to report and
+      worth more: a rule that fires wrongly is annoying, a rule that stays
+      silent on a bad citation is the failure the whole tool exists to prevent.
+    </p>
+    <p>
+      The link composes the report for you, because a report that omits the
+      settings cannot be acted on. The same citation is a finding under the
+      Whitepages and correct under the 21st edition Bluepages; a citation
+      "missing" from an authority list means one thing against five sample
+      cases and another against CourtListener; and a document read by optical
+      character recognition may simply not say what ReCite checked. So the
+      report carries the Bluebook you had selected, what the cases were checked
+      against, whether OCR was involved, and the exact build.
+    </p>
+    <div class="panel">
+      <p>
+        <strong>Nothing is sent by composing a report.</strong> There is no
+        ReCite server to send it to. The dialog builds the text in your
+        browser and you decide where it goes — copy it, save it as a file, or
+        open a prefilled issue.
+      </p>
+    </div>
+    <p>
+      <strong>The issue tracker is public</strong>, so the report carries the
+      citation and nothing else. The surrounding sentence is a tick-box, is
+      capped at a couple of hundred characters, and is off unless you turn it
+      on. The citation itself is an editable field, so you can change a party
+      name before you send it. And the dialog shows you the exact text first:
+      what the preview says is what goes, and there is nothing underneath it.
+    </p>
+
     <h2>Getting help</h2>
     <p>
-      Open an issue at
+      For anything else, open an issue at
       <a href="${REPO}/issues">${REPO.replace("https://", "")}/issues</a>.
       Please include what you expected, what happened, and the citation text
       involved.
@@ -370,7 +406,9 @@ const support: Page = {
         issue.</strong> The tracker is public. Citations reproduced from a
         published opinion are fine; text from a client's draft is not. If a
         problem only reproduces on a confidential document, describe the shape
-        of the citation rather than quoting it.
+        of the citation rather than quoting it — or use the
+        <strong>Report</strong> link in the app, which is built to keep that
+        line for you.
       </p>
     </div>
 

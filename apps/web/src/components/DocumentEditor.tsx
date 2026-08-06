@@ -217,6 +217,18 @@ export const DocumentEditor = forwardRef<EditorHandle, DocumentEditorProps>(
             text,
           };
         },
+        selection: () => {
+          const node = host.current;
+          const selected = node?.ownerDocument.getSelection();
+          // Only what is inside the page: a selection that started in the
+          // findings panel is not part of the document.
+          if (!node || !selected || selected.rangeCount === 0) return "";
+          const range = selected.getRangeAt(0);
+          return node.contains(range.commonAncestorContainer)
+            ? selected.toString()
+            : "";
+        },
+
         reveal: (start, end, expected) => {
           const node = host.current;
           const box = frame.current;

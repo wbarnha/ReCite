@@ -58,6 +58,15 @@ export interface DocumentHost {
    * into the saved `.docx` or `.odt` instead — see `export/comments.ts`.
    */
   annotate?(text: string, comments: readonly DocumentComment[]): Promise<ApplyOutcome>;
+  /**
+   * Whatever the user has selected, as text.
+   *
+   * Only used to prefill a report about a citation ReCite said nothing about —
+   * the case where there is no finding to start from, and the reporter would
+   * otherwise be retyping the citation. Optional, and a host that cannot
+   * answer just leaves the field empty.
+   */
+  selection?(): Promise<string>;
 }
 
 // ------------------------------------------------------------------ browser --
@@ -72,7 +81,12 @@ export class BrowserHost implements DocumentHost {
     private setText: (next: string) => void,
     /** Select the span and scroll it into view. See `textarea.ts`. */
     private select?: (start: number, end: number) => void,
+    private getSelection?: () => string,
   ) {}
+
+  selection(): Promise<string> {
+    return Promise.resolve(this.getSelection?.() ?? "");
+  }
 
   read(): Promise<string> {
     return Promise.resolve(this.getText());
@@ -286,6 +300,16 @@ export class WordHost implements DocumentHost {
    * that out by watching it throw halfway through a document is worse than
    * being told up front.
    */
+  /** What is selected in the document, for prefilling a report. */
+  async selection(): Promise<string> {
+    return Word.run(async (context) => {
+      const range = context.document.getSelection();
+      range.load("text");
+      await context.sync();
+      return range.text ?? "";
+    });
+  }
+
   static supportsComments(): boolean {
     try {
       return Office.context.requirements.isSetSupported("WordApi", "1.4");
