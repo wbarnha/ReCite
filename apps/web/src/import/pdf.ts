@@ -6,57 +6,28 @@
  * scanner is a stack of photographs, and getting text out means optical
  * character recognition — which is a guess, and sometimes a wrong one.
  *
- * Scribe.js handles both, and its `autoShallow` mode is what makes the
- * distinction automatic: pages with a usable text layer are read directly, and
- * only pages without one are OCRed. That matters for accuracy as much as for
- * speed, because OCRing a page that already has perfect text can only make it
- * worse.
+ * This module holds everything around the reading itself: the session cache,
+ * the timings, and the accuracy warning. `pdf-permissive.ts` does the reading,
+ * with `pdfjs-dist` and `tesseract.js`.
  *
- * **The whole engine is loaded lazily**, from this module, which nothing
- * imports statically. Someone who pastes text or opens a `.docx` never
- * downloads it. It is tens of megabytes and it would otherwise be the first
- * thing every visitor waited for.
+ * There used to be a second reader here, on `scribe.js-ocr`. It was removed
+ * when the permissive stack matched it — same 99.6% character similarity, same
+ * 100% citation recall, and faster — because Scribe is AGPL-3.0 and this
+ * project is BSD-2-Clause. See `docs/testing.md` for the measurement and
+ * `ocr-repair.ts` for the one thing that had to be fixed to get there.
  *
- * **Nothing is fetched from a CDN.** Scribe's default is to pull language
- * models from jsDelivr; `opt.langPath` overrides that to this origin, and the
- * models are published alongside the app by `tools/tessdata`. See
- * `docs/security.md`.
+ * **The engine is loaded lazily**, from this module, which nothing imports
+ * statically. Someone who pastes text or opens a `.docx` never downloads it.
+ * `warmup.ts` starts the download earlier when there is evidence a PDF is
+ * coming, without breaking that.
  */
 
-import type Scribe from "scribe.js-ocr";
-
+import { cached, fileKey, remember } from "./cache.js";
 import type { ImportResult, ProgressHandler } from "./index.js";
-
-/** The module shape, so the lazy import stays typed. */
-type ScribeModule = { default: typeof Scribe };
-
-/**
- * Where the self-hosted language models are served from.
- *
- * Relative to the deployment base, because the site is served from
- * `/<repo>/` on GitHub Pages and an absolute `/tessdata` would 404 there.
- */
-function langPath(): string {
-  return new URL("tessdata", document.baseURI).toString();
-}
-
-/** Loaded once and reused: initialising the workers is the expensive part. */
-let engine: Promise<ScribeModule> | undefined;
-
-async function load(onProgress: ProgressHandler): Promise<ScribeModule> {
-  if (!engine) {
-    onProgress("Loading the OCR engine (one-time download)…");
-    engine = import("scribe.js-ocr").then((module) => {
-      const scribe = module.default;
-      // Self-hosted models. Without this, opening a scanned PDF would tell a
-      // CDN that someone is OCRing a document.
-      scribe.opt.langPath = langPath();
-      scribe.opt.warningHandler = () => {};
-      return module;
-    });
-  }
-  return engine;
-}
+import { ImportTimer } from "./metrics.js";
+import type { OcrSettings } from "./ocr-options.js";
+import { DEFAULT_OCR_SETTINGS } from "./ocr-options.js";
+import { warmModel } from "./warmup.js";
 
 /**
  * Read a PDF into text.
@@ -68,83 +39,85 @@ async function load(onProgress: ProgressHandler): Promise<ScribeModule> {
 export async function readPdf(
   file: File,
   onProgress: ProgressHandler,
+  settings: OcrSettings = DEFAULT_OCR_SETTINGS,
 ): Promise<ImportResult> {
-  const module = await load(onProgress);
-  const scribe = module.default;
+  const timer = new ImportTimer();
+
+  const key = await timer.measure("hash", () => fileKey(file, settings));
+  const hit = cached(key);
+  if (hit) {
+    return {
+      ...hit,
+      metrics: timer.finish({
+        bytes: file.size,
+        chars: hit.text.length,
+        ocrPages: hit.ocr?.pages ?? 0,
+        recognised: hit.ocr !== undefined,
+        engineColdStart: false,
+        cacheHit: true,
+      }),
+    };
+  }
+
+  // Awaited rather than raced. A warm started at `dragover` has usually
+  // finished by now; if it has not, awaiting it is still better than letting
+  // the engine open a second request for the same eleven megabytes.
+  if (settings.mode !== "never") {
+    onProgress("Fetching the language model…");
+    await timer.measure("model", () => warmModel());
+  }
 
   onProgress("Reading the PDF…");
 
-  /**
-   * Whether recognition ran, and over how many pages if that is knowable.
-   *
-   * Both, because they are separate facts and only one is reliable. Scribe
-   * emits `{ type: "recognize" }` as a bare tick with no page number for this
-   * document — 20 of them for a ten-page filing — so counting them would
-   * report "20 pages" for a ten-page file. Where a page number *is* supplied
-   * it is collected, and the count is only shown when there is one.
-   *
-   * An earlier version watched for `type: "pageOCR"`, which Scribe never
-   * emits at all. The *Mata* filing came back labelled a plain PDF with no
-   * accuracy warning, despite obvious OCR damage in the text (`Affirma tion`,
-   * `Opposi T I on`). Dropping that warning silently is worse than showing no
-   * progress: it is the caveat a reader most needs.
-   */
-  let recognitionRan = false;
-  const recognisedPages = new Set<number>();
+  const { extractPermissive } = await import("./pdf-permissive.js");
+  const read = await timer.measure("read", () =>
+    extractPermissive(file, onProgress, settings),
+  );
 
-  scribe.opt.progressHandler = (message: unknown) => {
-    const event = message as { type?: string; n?: number } | undefined;
-    if (event?.type !== "recognize") return;
-
-    recognitionRan = true;
-    if (typeof event.n === "number") recognisedPages.add(event.n);
-
-    const pages = recognisedPages.size;
-    onProgress(
-      pages > 0
-        ? `Reading text from page images — ${pages} page${pages === 1 ? "" : "s"} so far…`
-        : "Reading text from page images…",
+  const warnings: string[] = [];
+  if (read.recognitionRan) {
+    const scope =
+      read.recognisedPages > 0
+        ? `${read.recognisedPages} page${read.recognisedPages === 1 ? "" : "s"} of this PDF had`
+        : "Part of this PDF had";
+    warnings.push(
+      `${scope} no usable text layer and was read by optical character ` +
+        "recognition. OCR misreads characters, and the ones it confuses — " +
+        "1 for l, 0 for O, 5 for S — are what citations are made of. Check " +
+        "anything reported here against the original before relying on it.",
     );
+  }
+  if (!read.text.trim()) {
+    warnings.push(
+      settings.mode === "never"
+        ? "No text could be read from this PDF. Recognition is turned off, " +
+            "so a scanned document returns nothing — set OCR to run on " +
+            "scanned pages to read it."
+        : "No text could be read from this PDF. If it is a scan, it may be " +
+            "too faint or too low-resolution for OCR.",
+    );
+  }
+
+  const result: ImportResult = {
+    text: normalise(read.text),
+    format: read.recognitionRan ? "PDF, partly read by OCR" : "PDF",
+    warnings,
+    ...(read.recognitionRan ? { ocr: { pages: read.recognisedPages } } : {}),
   };
 
-  try {
-    const text = await scribe.extractText([file], ["eng"], "txt", {
-      // Leaves text-native pages alone and OCRs only the scanned ones. This
-      // is the behaviour the whole feature is for.
-      ocrPages: "autoShallow",
-    });
+  remember(key, result);
 
-    const ocrPages = recognisedPages.size;
-    const warnings: string[] = [];
-    if (recognitionRan) {
-      const scope =
-        ocrPages > 0
-          ? `${ocrPages} page${ocrPages === 1 ? "" : "s"} of this PDF had`
-          : "Part of this PDF had";
-      warnings.push(
-        `${scope} no usable text layer and was read by optical character ` +
-          "recognition. OCR misreads characters, and the ones it confuses — " +
-          "1 for l, 0 for O, 5 for S — are what citations are made of. Check " +
-          "anything reported here against the original before relying on it.",
-      );
-    }
-    if (!text.trim()) {
-      warnings.push(
-        "No text could be read from this PDF. If it is a scan, it may be too " +
-          "faint or too low-resolution for OCR.",
-      );
-    }
-
-    const result: ImportResult = {
-      text: normalise(text),
-      format: recognitionRan ? "PDF, partly read by OCR" : "PDF",
-      warnings,
-      ...(recognitionRan ? { ocr: { pages: ocrPages } } : {}),
-    };
-    return result;
-  } finally {
-    scribe.opt.progressHandler = () => {};
-  }
+  return {
+    ...result,
+    metrics: timer.finish({
+      bytes: file.size,
+      chars: result.text.length,
+      ocrPages: read.recognisedPages,
+      recognised: read.recognitionRan,
+      engineColdStart: true,
+      cacheHit: false,
+    }),
+  };
 }
 
 /**
@@ -164,10 +137,8 @@ function normalise(text: string): string {
     .trim();
 }
 
-/** Release the OCR workers. */
+/** Release the recognition workers. */
 export async function releasePdfEngine(): Promise<void> {
-  if (!engine) return;
-  const module = await engine;
-  await module.default.terminate();
-  engine = undefined;
+  const { releasePermissiveEngine } = await import("./pdf-permissive.js");
+  await releasePermissiveEngine();
 }

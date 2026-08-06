@@ -7,7 +7,13 @@
     // TypeScript will not let a project reference one that emits nothing.
     // Declarations only, into a gitignored directory.
     "emitDeclarationOnly": true,
-    "outDir": "./dist-types"
+    "outDir": "./dist-types",
+    // `tools/bench` scores OCR output by parsing it, which needs the real
+    // parser rather than a copy that could drift from it.
+    "paths": {
+      "@recite/core": ["../packages/core/src/index.ts"]
+    }
   },
-  "include": ["**/*.ts"]
+  "include": ["**/*.ts"],
+  "references": [{ "path": "../packages/core" }]
 }

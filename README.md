@@ -113,7 +113,7 @@ step, because there is nowhere to upload to.
 | `.odt`                     | the same, with ODF's different text model                                                         |
 | `.html` `.htm` `.xml`      | a tag scanner, script and style content dropped                                                   |
 | `.pdf` (with a text layer) | read directly — exact, no guessing                                                                |
-| `.pdf` (scanned)           | **OCR**, in the browser, via [Scribe.js](https://github.com/scribeocr/scribe.js)                  |
+| `.pdf` (scanned)           | **OCR**, in the browser, via [Tesseract.js](https://github.com/naptha/tesseract.js)               |
 
 Format is decided by content first and extension second, because a `.doc` that
 is really a `.docx` is common enough in a firm that trusting the name would
@@ -129,17 +129,30 @@ Save as `.docx`, `.rtf` or `.txt` instead.
 
 Pages that already have a text layer are read directly; only pages without one
 are recognised. That is an accuracy decision as much as a speed one — OCRing a
-page that already has perfect text can only make it worse.
+page that already has perfect text can only make it worse. The **OCR** dropdown
+overrides it: _every page_ for a scanner that baked in a bad text layer,
+_never_ when you want no guessed characters in the result at all.
+
+Opening the same file twice in one sitting is instant — the text is kept in
+memory for the tab. Only in memory: a document is still gone when you close it,
+which is the promise the tool is sold on, so nothing is written to IndexedDB or
+any other store that would outlive the page. There is a **Forget opened
+documents** link if you want it gone sooner.
+
+The engine downloads only when there is evidence a PDF is coming: dragging one
+over the drop zone exposes its type before the drop, so dragging a Word file
+still fetches nothing.
 
 **OCR is a machine reading a picture, and it misreads characters** — `1` for
 `l`, `0` for `O`, `5` for `S`. Those are exactly the characters citations are
 made of, so a volume or page recovered this way can be wrong while looking
 right. ReCite says so when it has used OCR, and reports how many pages.
 
-The engine and its English language model are published with the app and served
-from the same origin. Scribe's default is to pull models from a CDN; that is
-overridden, so opening a scan does not tell anyone else that you did. Nothing
-downloads until you actually open a PDF — the first-load bundle is unaffected.
+The engine, its WebAssembly core and its English language model are published
+with the app and served from the same origin. Tesseract.js defaults to a CDN
+for all three; every one is overridden, so opening a scan does not tell anyone
+else that you did. Nothing downloads until you actually open a PDF — the
+first-load bundle is unaffected.
 
 ## Try it on the document that made this necessary
 

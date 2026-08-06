@@ -7,10 +7,15 @@ import { FileDrop } from "./components/FileDrop.js";
 import { Findings } from "./components/Findings.js";
 import { Footer } from "./components/Footer.js";
 import { SaveAs } from "./components/SaveAs.js";
+import { OcrPicker } from "./components/OcrPicker.js";
 import { ProfilePicker } from "./components/ProfilePicker.js";
 import { BUILD_INFO, SHORT_COMMIT } from "./build-info.js";
 import { BrowserHost } from "./host.js";
 import type { ImportResult } from "./import/index.js";
+import type { OcrMode, OcrSettings } from "./import/ocr-options.js";
+import { DEFAULT_OCR_SETTINGS, workersFromQuery } from "./import/ocr-options.js";
+import { cacheSize, forgetAll } from "./import/cache.js";
+import { charsPerSecond, describePhases, formatMs } from "./import/metrics.js";
 import type { ReportContext } from "./export/index.js";
 import { SAMPLE_CORPUS, SAMPLE_TEXT } from "./sample.js";
 import "./styles.css";
@@ -26,6 +31,10 @@ function WebApp() {
   const [imported, setImported] = useState<(ImportResult & { name: string }) | null>(
     null,
   );
+  const [ocr, setOcr] = useState<OcrSettings>(() => ({
+    ...DEFAULT_OCR_SETTINGS,
+    workers: workersFromQuery(window.location.search),
+  }));
   const editor = useRef<HTMLTextAreaElement>(null);
 
   // The textarea is the document. Reads come from the live DOM value so that
@@ -103,7 +112,15 @@ function WebApp() {
       <div className="columns">
         <section>
           <h2>Document</h2>
+          <div className="toolbar">
+            <OcrPicker
+              settings={ocr}
+              disabled={recite.busy}
+              onMode={(mode: OcrMode) => setOcr((current) => ({ ...current, mode }))}
+            />
+          </div>
           <FileDrop
+            ocr={ocr}
             disabled={recite.busy}
             onImported={(result, name) => {
               setDraft(result.text);
@@ -121,6 +138,38 @@ function WebApp() {
                   {warning}
                 </p>
               ))}
+              {imported.metrics && (
+                <p className="import-timing">
+                  {imported.metrics.cacheHit
+                    ? "Read from this session's memory — no recognition was run."
+                    : `Took ${formatMs(imported.metrics.totalMs)} — ${describePhases(imported.metrics)}`}
+                  {!imported.metrics.cacheHit &&
+                    charsPerSecond(imported.metrics) !== undefined && (
+                      <>
+                        {" "}
+                        ({charsPerSecond(imported.metrics)?.toLocaleString(
+                          "en-US",
+                        )}{" "}
+                        characters/second)
+                      </>
+                    )}
+                  {cacheSize() > 0 && (
+                    <>
+                      {" "}
+                      <button
+                        type="button"
+                        className="link-like"
+                        onClick={() => {
+                          forgetAll();
+                          setImported(null);
+                        }}
+                      >
+                        Forget opened documents
+                      </button>
+                    </>
+                  )}
+                </p>
+              )}
             </div>
           )}
           <textarea

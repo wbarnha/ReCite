@@ -161,12 +161,14 @@ still refuses **every cross-origin request**, so document text cannot leave the
 machine. The Word task pane keeps `connect-src 'none'`, because Word hands it
 the document and it has nothing to load.
 
-The OCR language model is published beside the application rather than fetched.
-Scribe's default is to pull `.traineddata` from jsDelivr, which would have put
+The OCR engine and its language model are published beside the application
+rather than fetched. Tesseract.js defaults to jsDelivr for its worker, its
+WebAssembly core _and_ its `.traineddata`, any of which would have put
 a third party in the path of a document check and told them that a request
 correlated with OCRing a document had come from that address. `opt.langPath`
-overrides it, and `tools/tessdata` publishes the model. The fallback URL is
-still a string in the bundle — it is the default in library code we do not
+`langPath`, `workerPath` and `corePath` override them, and `tools/tessdata`
+and `tools/tesseract` publish the files. The fallback URLs are
+still strings in the bundle — it is the default in library code we do not
 control — so the override is verified rather than assumed: a test loads the
 built site in a real browser, intercepts every request, and fails if one leaves
 the origin. It caught this working the first time it ran, by showing the model
@@ -255,16 +257,23 @@ the point of enforcing them is that losing it becomes visible.
 ## Dependencies
 
 What reaches a browser: React, React DOM, and — only if someone opens a PDF —
-Scribe.js for OCR. That is the whole runtime dependency tree.
+`pdfjs-dist` to read it and `tesseract.js` to recognise the scanned pages. That
+is the whole runtime dependency tree, and every item in it is permissively
+licensed: React is MIT, the other two are Apache-2.0.
 
-Scribe is the one substantial dependency in the project and it was taken on
-deliberately, for a capability that cannot be written from scratch: optical
-character recognition. Three things were done to bound it. It is **lazily
-loaded**, from a module nothing imports statically, so a visitor who never
-opens a PDF never downloads a byte of it — the first-load bundle is unchanged.
-Its **Node canvas implementation is aliased out** of the browser build, which
-removes a native binary that would otherwise have been shipped to every user.
-And its **CDN default is overridden**, as described above.
+That last point was not free. ReCite previously used `scribe.js-ocr`, which is
+**AGPL-3.0** — a licence this project is not under, on a bundle published from
+GitHub Pages. It was replaced rather than relabelled, because an AGPL
+dependency that is still shipped is still distributed whether or not anything
+reaches it. The replacement was measured before it was adopted and needed one
+fix to match on accuracy; `docs/testing.md` records both, including the
+citation the old stack read correctly and the new one initially invented.
+
+The PDF pair is the substantial dependency now, taken on deliberately for a
+capability that cannot be written from scratch. Two things bound it. It is
+**lazily loaded**, from a module nothing imports statically, so a visitor who
+never opens a PDF never downloads a byte of it — the first-load bundle is
+unchanged. And its **CDN defaults are overridden**, as described above.
 
 Everything else the file import handles — `.docx`, `.odt`, `.rtf`, `.html` —
 is parsed with no dependency at all. The office formats are ZIP archives, and

@@ -42,8 +42,23 @@ function sourceFiles(): string[] {
   return found;
 }
 
+/**
+ * Source with comments removed.
+ *
+ * The scans below look for an API being *reachable*, and a comment cannot
+ * reach anything. Scanning raw text instead would mean the code could not
+ * explain its own restraint — `import/cache.ts` says in prose why it holds
+ * nothing in IndexedDB, and that sentence is worth more than the false
+ * positive it used to cause.
+ */
+function withoutComments(source: string): string {
+  return source
+    .replace(/\/\*[\s\S]*?\*\//g, " ")
+    .replace(/(^|[^:"'`\\])\/\/.*$/gm, "$1");
+}
+
 const SHIPPED = sourceFiles().map(
-  (path) => [path.slice(ROOT.length + 1), read(path)] as const,
+  (path) => [path.slice(ROOT.length + 1), withoutComments(read(path))] as const,
 );
 
 describe("nothing in the shipped code can transmit or persist", () => {
@@ -71,23 +86,42 @@ describe("nothing in the shipped code can transmit or persist", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("uses fetch in exactly one place, for a file published with the app", () => {
-    // The claim was never "no fetch" — it is that nothing leaves the origin.
-    // The example filing is served from this origin and loading it is a
-    // request the user asked for by pressing a button. Pinning the call site
-    // means a second one has to be argued for rather than added quietly.
-    const callers = SHIPPED.filter(([, contents]) => /\bfetch\s*\(/.test(contents)).map(
-      ([path]) => path,
-    );
-    expect(callers).toEqual(["apps/web/src/example.ts"]);
+  /**
+   * Every place the app is allowed to open a request, and why.
+   *
+   * The claim was never "no fetch" — it is that nothing leaves the origin.
+   * Pinning the call sites means a new one has to be argued for here, in
+   * writing, rather than added quietly. Both of these fetch a file published
+   * alongside the app from the app's own origin.
+   */
+  const FETCH_SITES: ReadonlyArray<readonly [string, string]> = [
+    [
+      "apps/web/src/example.ts",
+      "the example filing, fetched because the user pressed a button",
+    ],
+    [
+      "apps/web/src/import/warmup.ts",
+      "the OCR language model, fetched early so opening a scan is faster",
+    ],
+  ];
+
+  it("opens requests only from the places argued for above", () => {
+    const callers = SHIPPED.filter(([, contents]) => /\bfetch\s*\(/.test(contents))
+      .map(([path]) => path)
+      .sort();
+    expect(callers).toEqual([...FETCH_SITES].map(([path]) => path).sort());
   });
 
-  it("builds that one URL relative to the page, so it cannot point elsewhere", () => {
-    const example = SHIPPED.find(([path]) => path.endsWith("example.ts"))?.[1] ?? "";
-    expect(example).toContain("document.baseURI");
-    // No absolute URL anywhere in it.
-    expect(example).not.toMatch(/fetch\s*\(\s*["'`]https?:/);
-  });
+  it.each(FETCH_SITES)(
+    "%s builds its URL relative to the page, so it cannot point elsewhere",
+    (path) => {
+      const source = SHIPPED.find(([name]) => name === path)?.[1] ?? "";
+      expect(source, `${path} was not found`).not.toBe("");
+      expect(source).toContain("document.baseURI");
+      // No absolute URL anywhere in the code — comments are already stripped.
+      expect(source).not.toMatch(/https?:\/\//);
+    },
+  );
 });
 
 describe("the Content Security Policy backs the claim", () => {

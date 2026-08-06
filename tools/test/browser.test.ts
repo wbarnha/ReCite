@@ -8,50 +8,25 @@
  * - **OCR works.** Not "the code that calls the OCR library is well typed" —
  *   that a scanned page, with no text layer at all, comes back as readable
  *   citations.
- * - **Nothing leaves the origin.** Scribe's default is to fetch language
- *   models from jsDelivr, and the string is still in the bundle because it is
- *   the fallback. The only way to know the override took is to watch the
- *   network.
+ * - **Nothing leaves the origin.** `tesseract.js` defaults to jsDelivr for its
+ *   worker, its WebAssembly core *and* its language model, and those strings
+ *   are still in the bundle because they are the fallbacks. The only way to
+ *   know the overrides took is to watch the network.
  *
  * Skipped when Chromium is not available, so a contributor without it can
  * still run the suite — but CI has it, and CI is where this has to pass.
  */
 
-import { createServer, type Server } from "node:http";
-import { readFileSync, existsSync } from "node:fs";
-import { extname, join, normalize } from "node:path";
-import { dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { type Server } from "node:http";
 
 import type * as playwrightTypes from "playwright";
 import type { Browser, Page } from "playwright";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { makeScannedPdf } from "./helpers/scanned-pdf.js";
+import { BASE_PATH, CHROMIUM, serveSite, siteIsBuilt } from "./helpers/site-server.js";
 
-const HERE = dirname(fileURLToPath(import.meta.url));
-const ROOT = join(HERE, "..", "..");
-const DIST = join(ROOT, "apps", "web", "dist");
-
-/** The site is served from a sub-path on Pages, so the test does too. */
-const BASE_PATH = "/ReCite/";
-
-const MIME: Record<string, string> = {
-  ".html": "text/html; charset=utf-8",
-  ".js": "text/javascript; charset=utf-8",
-  ".css": "text/css; charset=utf-8",
-  ".wasm": "application/wasm",
-  ".json": "application/json",
-  ".png": "image/png",
-  ".gz": "application/gzip",
-  ".xml": "application/xml",
-  ".map": "application/json",
-};
-
-/** Pre-installed by the environment; Playwright is told not to download one. */
-const CHROMIUM = "/opt/pw-browsers/chromium-1194/chrome-linux/chrome";
-
-const built = existsSync(join(DIST, "index.html")) && existsSync(CHROMIUM);
+const built = siteIsBuilt();
 /** Imported dynamically so the suite still loads where Playwright is absent. */
 let playwright: typeof playwrightTypes | undefined;
 try {
@@ -62,45 +37,6 @@ try {
 
 const runnable = built && playwright !== undefined;
 
-/** Serve `dist/` under the same sub-path GitHub Pages uses. */
-function serve(): Promise<{ server: Server; origin: string }> {
-  const server = createServer((request, response) => {
-    const url = new URL(request.url ?? "/", "http://localhost");
-    let path = decodeURIComponent(url.pathname);
-
-    if (!path.startsWith(BASE_PATH)) {
-      response.writeHead(404).end("outside the base path");
-      return;
-    }
-    path = path.slice(BASE_PATH.length) || "index.html";
-
-    // The served tree is a fixture, but treating a request path as safe is a
-    // habit worth not having.
-    const target = join(DIST, normalize(path).replace(/^(?:\.\.[/\\])+/, ""));
-    if (!target.startsWith(DIST) || !existsSync(target)) {
-      response.writeHead(404).end("not found");
-      return;
-    }
-
-    response.writeHead(200, {
-      "Content-Type": MIME[extname(target)] ?? "application/octet-stream",
-      // Scribe's workers want these for SharedArrayBuffer; harmless otherwise.
-      "Cross-Origin-Opener-Policy": "same-origin",
-      "Cross-Origin-Embedder-Policy": "require-corp",
-      "Cross-Origin-Resource-Policy": "same-origin",
-    });
-    response.end(readFileSync(target));
-  });
-
-  return new Promise((resolve) => {
-    server.listen(0, "127.0.0.1", () => {
-      const address = server.address();
-      const port = typeof address === "object" && address ? address.port : 0;
-      resolve({ server, origin: `http://127.0.0.1:${port}` });
-    });
-  });
-}
-
 describe.skipIf(!runnable)("the published site in a browser", () => {
   let server: Server;
   let origin: string;
@@ -110,7 +46,7 @@ describe.skipIf(!runnable)("the published site in a browser", () => {
   let requested: string[] = [];
 
   beforeAll(async () => {
-    ({ server, origin } = await serve());
+    ({ server, origin } = await serveSite());
     browser = await playwright!.chromium.launch({
       executablePath: CHROMIUM,
       args: ["--no-sandbox"],
@@ -122,13 +58,13 @@ describe.skipIf(!runnable)("the published site in a browser", () => {
     server?.close();
   });
 
-  async function open() {
+  async function open(query = "") {
     const page = await browser.newPage();
     requested = [];
     page.on("request", (request) => requested.push(request.url()));
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
-    await page.goto(`${origin}${BASE_PATH}`, { waitUntil: "networkidle" });
+    await page.goto(`${origin}${BASE_PATH}${query}`, { waitUntil: "networkidle" });
     return { page, errors };
   }
 
@@ -349,6 +285,35 @@ describe.skipIf(!runnable)("the published site in a browser", () => {
     expect(offOrigin()).toEqual([]);
     expect(requested.some((url) => url.includes("traineddata"))).toBe(true);
 
+    await page.close();
+  }, 300_000);
+
+  it("reads a scanned statute without inventing a different one", async () => {
+    // The section symbol is the one character Tesseract cannot be trusted
+    // with here: on a dense page it reads `§§ 1544` as `§8§ 1544`, and the
+    // parser then reports a citation to **section 8** — an authority the
+    // document never cited. `import/ocr-repair.ts` puts it back. This is the
+    // end-to-end proof that it does.
+    const pdf = await makeScannedPdf(browser, [
+      "Griggs v. State Farm Lloyds, 181 F.3d 694 (5th Cir. 1999).",
+      "See also 18 U.S.C. §§ 1544, 1546 (2012).",
+    ]);
+
+    const { page } = await open();
+    await page.setInputFiles("input[type=file]", {
+      name: "scanned.pdf",
+      mimeType: "application/pdf",
+      buffer: pdf,
+    });
+    const text = await waitForMatch(page, "textarea", /Griggs/, 300_000);
+
+    expect(text).toContain("181 F.3d 694");
+    // The repair fired, or did not need to. Either way no invented section.
+    expect(text).not.toMatch(/§\d§/);
+    expect(text).toContain("1544");
+    // tesseract.js defaults to jsDelivr for its worker, its WebAssembly core
+    // *and* its language model. All three are overridden to this origin.
+    expect(offOrigin()).toEqual([]);
     await page.close();
   }, 300_000);
 });

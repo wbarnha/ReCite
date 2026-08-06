@@ -13,6 +13,9 @@
  * failure.
  */
 
+import type { ImportMetrics } from "./metrics.js";
+import type { OcrSettings } from "./ocr-options.js";
+import { DEFAULT_OCR_SETTINGS } from "./ocr-options.js";
 import { readHtml, looksLikeHtml } from "./html.js";
 import { readDocx, readOdt } from "./office.js";
 import { looksLikeRtf, readRtf } from "./rtf.js";
@@ -34,6 +37,13 @@ export interface ImportResult {
   };
   /** Anything the reader wants the user to know before trusting the text. */
   readonly warnings: readonly string[];
+  /**
+   * Where the time went, for the readers that measure themselves.
+   *
+   * Present on the PDF path, which is the only slow one. Held in the page and
+   * discarded with it — see `metrics.ts` for why there is nowhere to send it.
+   */
+  readonly metrics?: ImportMetrics;
 }
 
 export class UnsupportedFormatError extends Error {
@@ -99,6 +109,7 @@ const PDF_MAGIC = "%PDF-";
 export async function importDocument(
   file: File,
   onProgress: ProgressHandler = () => {},
+  ocr: OcrSettings = DEFAULT_OCR_SETTINGS,
 ): Promise<ImportResult> {
   if (file.size === 0) {
     throw new UnsupportedFormatError(`${file.name} is empty.`);
@@ -117,7 +128,7 @@ export async function importDocument(
   // --- PDF, by magic number -------------------------------------------
   if (head.startsWith(PDF_MAGIC)) {
     const { readPdf } = await import("./pdf.js");
-    return readPdf(file, onProgress);
+    return readPdf(file, onProgress, ocr);
   }
 
   // --- ZIP-based office formats ---------------------------------------
