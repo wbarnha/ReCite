@@ -1,5 +1,6 @@
 import { useCallback, useId, useState } from "react";
 
+import type { RichDocument } from "../document/model.js";
 import type { DocumentComment, ExportFormat, ReportContext } from "../export/index.js";
 import {
   baseName,
@@ -24,12 +25,21 @@ export function SaveAs({
   text,
   context,
   comments = [],
+  document,
   disabled = false,
 }: {
   text: string;
   context: ReportContext;
   /** Pincite notes to write into the file, for the formats that carry one. */
   comments?: readonly DocumentComment[];
+  /**
+   * The formatted document, read at the moment of saving.
+   *
+   * A getter rather than a value: the editor owns its own DOM and does not
+   * re-render this component when a word is typed, so anything captured here
+   * on the last render would be a document from several keystrokes ago.
+   */
+  document?: () => RichDocument | undefined;
   disabled?: boolean;
 }) {
   const selectId = useId();
@@ -42,7 +52,11 @@ export function SaveAs({
   const save = useCallback(async () => {
     setError("");
     try {
-      const blob = await buildExport(format, text, context, comments);
+      const rich = document?.();
+      const blob = await buildExport(format, text, context, {
+        comments,
+        ...(rich ? { document: rich } : {}),
+      });
       const suffix = isReport(format) ? "-citation-report" : "-checked";
       downloadBlob(
         blob,
@@ -51,7 +65,7 @@ export function SaveAs({
     } catch (problem) {
       setError(problem instanceof Error ? problem.message : String(problem));
     }
-  }, [format, text, context, comments]);
+  }, [format, text, context, comments, document]);
 
   const empty = text.trim().length === 0;
   const noFindings = isReport(format) && context.findings.length === 0;

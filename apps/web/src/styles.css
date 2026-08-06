@@ -581,3 +581,181 @@ select {
   margin-top: 0.5rem;
   font-size: 0.8rem;
 }
+
+/* --------------------------------------------------------------- editor --- */
+
+.editor {
+  margin-bottom: 0.75rem;
+}
+
+.editor-toolbar {
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.editor-toolbar .mark {
+  width: 2rem;
+  font-size: 0.9rem;
+  line-height: 1;
+  padding: 0.35rem 0;
+}
+
+.mark-bold {
+  font-weight: 700;
+}
+.mark-italic {
+  font-style: italic;
+  font-family: Georgia, "Times New Roman", serif;
+}
+.mark-underline {
+  text-decoration: underline;
+}
+
+.editor-hint {
+  font-size: 0.75rem;
+  color: var(--muted);
+  flex: 1 1 12rem;
+  text-align: right;
+}
+
+/* The page, and the margin the comments live in. */
+.editor-frame {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 1rem;
+  max-height: 34rem;
+  overflow: auto;
+}
+
+.page {
+  flex: 1 1 34rem;
+  min-width: 0;
+  min-height: 30rem;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  /* A page, not a text box: the padding is the margin of a letter-size sheet,
+     scaled to whatever width the column has. */
+  padding: 2.4rem 2.8rem;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 12%);
+  font:
+    15px/1.75 Georgia,
+    "Times New Roman",
+    serif;
+  outline: none;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  cursor: text;
+}
+
+.page:focus-visible {
+  border-color: var(--accent);
+}
+
+.page p {
+  margin: 0 0 0.85rem;
+  /* An empty paragraph is a blank line the caret has to be able to reach. */
+  min-height: 1.75em;
+}
+
+.page p:last-child {
+  margin-bottom: 0;
+}
+
+/*
+ * Findings, painted rather than wrapped.
+ *
+ * The CSS Custom Highlight API marks ranges without putting an element in the
+ * document, so nothing ReCite draws here can end up in the saved file — and
+ * the caret does not move when a check re-runs. Only `color`, `background`,
+ * `text-decoration` and a few related properties are honoured inside
+ * `::highlight()`, which is why these are underlines rather than boxes.
+ */
+::highlight(recite-error) {
+  background-color: rgb(164 38 44 / 14%);
+  text-decoration: underline wavy var(--error);
+  text-underline-offset: 3px;
+}
+
+::highlight(recite-warning) {
+  background-color: rgb(138 97 0 / 14%);
+  text-decoration: underline wavy var(--warning);
+  text-underline-offset: 3px;
+}
+
+::highlight(recite-info) {
+  background-color: rgb(26 79 138 / 10%);
+}
+
+::highlight(recite-annotation) {
+  background-color: rgb(15 107 63 / 14%);
+}
+
+.editor-margin {
+  position: relative;
+  flex: 0 0 15rem;
+  align-self: stretch;
+}
+
+.margin-note {
+  position: absolute;
+  left: 0;
+  right: 0;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--safe);
+  border-radius: 6px;
+  padding: 0.45rem 0.6rem;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  transition: top 120ms ease-out;
+}
+
+.margin-note.unquoted {
+  border-left-color: var(--warning);
+}
+
+.margin-note.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgb(26 79 138 / 20%);
+}
+
+.margin-note header {
+  font-weight: 600;
+  font-style: italic;
+  margin-bottom: 0.2rem;
+}
+
+.margin-note blockquote {
+  margin: 0;
+  color: var(--muted);
+}
+
+.margin-note a {
+  display: inline-block;
+  margin-top: 0.3rem;
+}
+
+/* Below the two-column breakpoint the margin has nowhere to go. */
+@media (max-width: 60rem) {
+  .editor-frame {
+    flex-direction: column;
+  }
+
+  .editor-margin {
+    flex: 1 1 auto;
+    width: 100%;
+    position: static;
+  }
+
+  .margin-note {
+    position: static;
+    margin-bottom: 0.5rem;
+  }
+}

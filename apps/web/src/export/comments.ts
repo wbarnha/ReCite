@@ -13,6 +13,9 @@
 
 import type { Span } from "@recite/core";
 
+import type { RichDocument, RichRun } from "../document/model.js";
+import { paragraphOffsets, sliceRuns } from "../document/model.js";
+
 export interface DocumentComment {
   /** Half-open character range in the document text. */
   readonly span: Span;
@@ -25,9 +28,9 @@ export interface DocumentComment {
 export const COMMENT_AUTHOR = "ReCite";
 export const COMMENT_INITIALS = "RC";
 
-/** One piece of a paragraph: text, or a marker that opens or closes a range. */
+/** One piece of a paragraph: a run of text, or a marker opening or closing a range. */
 export type CommentChunk =
-  | { readonly kind: "text"; readonly text: string }
+  | { readonly kind: "run"; readonly run: RichRun }
   | { readonly kind: "start"; readonly id: number }
   | { readonly kind: "end"; readonly id: number };
 
@@ -40,7 +43,9 @@ export interface CommentedParagraph {
  *
  * Both office formats express a comment the same way — a marker where the
  * range opens, a marker where it closes, and the body somewhere else — so the
- * awkward part is identical for both and is done once, here.
+ * awkward part is identical for both and is done once, here. It works in runs
+ * rather than in strings so that a comment can start in the middle of a bold
+ * citation without the writers having to know about either.
  *
  * A comment whose range crosses a paragraph break opens in one paragraph and
  * closes in another, which both formats allow. A zero-length range is dropped:
@@ -48,24 +53,19 @@ export interface CommentedParagraph {
  * on the whole paragraph, which is not what was asked for.
  */
 export function layoutComments(
-  text: string,
+  document: RichDocument,
   comments: readonly DocumentComment[],
 ): CommentedParagraph[] {
-  const lines = text.replace(/\r\n?/g, "\n").split("\n");
   // Numbered after dropping the empty ones, so an id is an index into
   // `anchoredComments(...)` — which is the list the bodies are written from.
   const anchored = anchoredComments(comments).map((comment, id) => ({
     id,
     ...comment,
   }));
+  const offsets = paragraphOffsets(document);
 
-  const paragraphs: CommentedParagraph[] = [];
-  let offset = 0;
-
-  for (const line of lines) {
-    const start = offset;
-    const end = offset + line.length;
-    offset = end + 1; // the newline that separated this line from the next
+  return document.paragraphs.map((paragraph, index) => {
+    const { start, end } = offsets[index]!;
 
     /** Boundaries inside this paragraph, in the order they must be written. */
     const marks: Array<{ at: number; chunk: CommentChunk; rank: number }> = [];
@@ -95,20 +95,24 @@ export function layoutComments(
     marks.sort((a, b) => a.at - b.at || a.rank - b.rank);
 
     const chunks: CommentChunk[] = [];
+    const emit = (from: number, to: number): void => {
+      for (const run of sliceRuns(paragraph.runs, from - start, to - start)) {
+        chunks.push({ kind: "run", run });
+      }
+    };
+
     let cursor = start;
     for (const mark of marks) {
       if (mark.at > cursor) {
-        chunks.push({ kind: "text", text: text.slice(cursor, mark.at) });
+        emit(cursor, mark.at);
         cursor = mark.at;
       }
       chunks.push(mark.chunk);
     }
-    if (cursor < end) chunks.push({ kind: "text", text: text.slice(cursor, end) });
+    if (cursor < end) emit(cursor, end);
 
-    paragraphs.push({ chunks });
-  }
-
-  return paragraphs;
+    return { chunks };
+  });
 }
 
 /** The comment bodies, in the order the markers refer to them. */

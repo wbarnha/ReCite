@@ -1,15 +1,18 @@
 # Testing, and where the fixtures come from
 
 ```console
-$ pnpm test          # 922 tests
+$ pnpm test          # 1103 tests
 $ pnpm coverage
 $ pnpm check         # lint + format + types + tests, exactly what CI runs
 $ pnpm test:browser  # the built site in real Chromium (needs `pnpm build:release` first)
 ```
 
 `pnpm test:browser` is separate because it needs a build and a browser. It is
-the only place two claims can actually be checked: that OCR turns a scanned
-page into readable citations, and that nothing the app does leaves the origin.
+the only place some claims can actually be checked: that OCR turns a scanned
+page into readable citations, that nothing the app does leaves the origin
+unless a CourtListener token was supplied, and that the document editor reads a
+real `contenteditable` the way its model says it does — which is precisely the
+sort of thing a fake DOM would agree with and a real one would not.
 The second is not paranoia — tesseract.js's CDN fallbacks for its worker, its
 WebAssembly core and its language model are all still strings in the bundle,
 because they are the defaults in library code we do not control, so the

@@ -1,0 +1,142 @@
+# The document editor
+
+A textarea is the right control for pasting a paragraph and checking one
+citation. It is the wrong one for a brief.
+
+So when a **file** is opened — dragged in, chosen from the picker, or the
+example filing — the document becomes a page: serif type, paragraph structure,
+the findings marked where they are in the text, and the pincite quotations in a
+margin beside the citations they belong to. Paste into the box and nothing
+changes; the box is still there, and it is still what you get.
+
+That is the whole rule. A file becomes a document; text pasted stays text.
+
+## What it does
+
+|                    |                                                                  |
+| ------------------ | ---------------------------------------------------------------- |
+| Editing            | type, cut, paste, undo — it is a `contenteditable`, not a viewer |
+| Formatting         | bold, italic, underline, by toolbar or <kbd>Ctrl</kbd>+B/I/U     |
+| Findings           | marked in the text, by severity, as you check                    |
+| Fixes              | applied in place, keeping the formatting around them             |
+| Pincite quotations | in the margin, anchored to the citation, clickable               |
+| Saving             | the marks go into `.docx`, `.odt`, `.rtf` and `.html`            |
+
+**ReCite still does not read the formatting of a document you open.** It works
+on the text of citations, and a `.docx` is imported for its prose exactly as it
+always was. What is new is that the formatting _you_ apply in the editor is
+kept, and is written out when you save — because an editor that silently
+un-bolded a case name on save would be worse than no editor at all.
+
+There is a **Edit as plain text instead** checkbox. Neither surface is a trap;
+switching back and forth keeps the text and drops the marks, and says so.
+
+## How it is built
+
+No rich-text library. React and the two PDF packages are the whole runtime
+dependency tree, and `docs/security.md` explains why that number is worth
+keeping small. Three decisions do the work instead.
+
+### The text is the document
+
+`@recite/core` takes a string. A `Span` is a pair of character offsets into
+that string, and a `Correction` is a replacement for one of them. None of that
+changed, and none of it should: the rule set has no business knowing that
+something on screen is bold.
+
+So `RichDocument` is defined by its relationship to the plain text rather than
+the other way round:
+
+- `richToText(document)` is the string the engine sees.
+- A paragraph is one line of that string. The newline between two paragraphs
+  counts as one character, exactly as it does in a textarea.
+- `replaceRange(document, start, end, text)` edits by those same offsets.
+
+That invariant — **the same offset means the same thing in both** — is what
+lets a finding computed against a string light up the right words on screen,
+and a fix aimed at `[36, 48)` land on the right citation. `apps/web/test/document.test.ts`
+is mostly about holding it.
+
+Which corrections are _allowed_ is still decided by `applyCorrections` in
+`@recite/core`, against the plain text, so a formatted document and a plain one
+accept and refuse exactly the same set. Two rules fighting over one citation
+still produce a reported refusal rather than nonsense.
+
+### Marks live in the model, not in `execCommand`
+
+`document.execCommand("bold")` is deprecated, and its output differs by
+browser: `<b>` in one, a `<span style="font-weight: 700">` in another,
+sometimes both in the same document. Bolding a selection here instead reads the
+DOM into a `RichDocument`, toggles the mark over an offset range, and renders
+the result back.
+
+Deterministic, testable in Node without a DOM, and it follows the rule a word
+processor uses: if every character in the selection already carries the mark,
+the command removes it; otherwise it adds it. Anything else makes the button
+feel broken on a mixed selection.
+
+The reader still has to cope with whatever the browser produced by other
+means — a paste, an autocorrect — so `document/dom.ts` asks about computed
+meaning rather than matching tag names, and normalises everything back to the
+three marks ReCite has.
+
+### Findings are painted, not wrapped
+
+The obvious way to underline a bad citation inside a `contenteditable` is to
+wrap it in a `<span>`. That is also the wrong way: it puts ReCite's own markup
+into the thing being edited, moves the caret every time the check re-runs, and
+ends up in the saved file.
+
+The **CSS Custom Highlight API** exists for this. Ranges are registered with
+the browser and painted through `::highlight(...)`, and the DOM is untouched —
+so the text you select, copy and save is exactly what you typed. A browser test
+asserts both halves: that highlights are registered after a check, and that the
+editor's own HTML contains no ReCite markup.
+
+Where the API is missing the highlights simply do not appear, and the editor
+says so. That is a deliberate choice about what degrades: the findings panel
+still lists everything with a line and column, **Show** still selects the span,
+and nothing that decides whether a citation is wrong depends on any of it.
+
+### The DOM is the document
+
+While the editor is open, the `contenteditable` holds the document and React
+holds a derived copy of the text for the panels beside it. That is the same
+arrangement the textarea has always had — `BrowserHost` reads the live value,
+not a stale copy — and it is the only one that does not fight the caret.
+Re-rendering from React state on every keystroke would put the cursor back at
+the start of the paragraph on every character typed.
+
+`EditorHost` is a third `DocumentHost` alongside `BrowserHost` and `WordHost`.
+Everything above that seam is unchanged: `useReCite` still calls
+`read`/`apply`/`reveal` and still does not know which surface it has.
+
+## Comments in the margin
+
+When CourtListener has supplied the passage a pin cite points at — see
+[courtlistener.md](courtlistener.md) — each quotation appears in the right-hand
+margin, anchored to the citation and pushed down far enough not to sit on the
+one before it. Clicking a citation brings its note forward.
+
+A pin cite that could not be quoted is shown too, with the reason, rather than
+hidden. A reader who saw only the quoted ones would believe every page had been
+checked.
+
+Those same notes are written into a saved `.docx` or `.odt` as real comments.
+The margin is a preview of the file, not a separate feature.
+
+## What is tested where
+
+The split is deliberate, and follows the rule the rest of this repository uses:
+test a module where a module can answer, and use a real browser for the claims
+only a real browser can settle.
+
+| Where                            | What                                                     |
+| -------------------------------- | -------------------------------------------------------- |
+| `apps/web/test/document.test.ts` | the model: offsets, slicing, marks, applying corrections |
+| `apps/web/test/export.test.ts`   | the marks surviving a round trip through each writer     |
+| `apps/web/test/comments.test.ts` | comment markers landing on the right runs                |
+| `tools/test/browser.test.ts`     | the editor itself, in Chromium                           |
+
+Reading a `contenteditable` is precisely the sort of thing a fake DOM would
+agree with and a real one would not, which is why no DOM shim was added for it.

@@ -204,8 +204,109 @@ describe.skipIf(!runnable)("the published site in a browser", () => {
       mimeType: "text/plain",
       buffer: Buffer.from("Iqbal, 556 U.S. 662, 678 (2009). Id. at 680."),
     });
-    expect(await waitForMatch(page, "textarea", /Iqbal/, 20_000)).toContain("Iqbal");
+    // A supplied file lands in the editor, not in the text box.
+    expect(await waitForMatch(page, ".page", /Iqbal/, 20_000)).toContain("Iqbal");
     expect(offOrigin()).toEqual([]);
+    await page.close();
+  }, 60_000);
+
+  /** Open a `.txt` and wait for the editor to take over from the text box. */
+  async function openDocument(page: Page, body: string): Promise<void> {
+    await page.setInputFiles("input[type=file]", {
+      name: "brief.txt",
+      mimeType: "text/plain",
+      buffer: Buffer.from(body),
+    });
+    await page.locator(".page").waitFor({ state: "visible", timeout: 20_000 });
+  }
+
+  it("turns a supplied file into a page, and leaves a paste in the text box", async () => {
+    // The distinction the editor exists for. Somebody pasting a paragraph to
+    // check one citation wants a text box; somebody who has just opened an
+    // eleven-page filing wants to see the filing.
+    const { page } = await open();
+    expect(await page.locator("textarea").count()).toBe(1);
+    expect(await page.locator(".page").count()).toBe(0);
+
+    await openDocument(page, "Iqbal, 556 U.S. 662, 678 (2009). Id. at 680.");
+
+    expect(await page.locator("textarea").count()).toBe(0);
+    expect(await page.locator(".page").textContent()).toContain("556 U.S. 662");
+    expect(await page.locator(".page").getAttribute("contenteditable")).toBe("true");
+    expect(offOrigin()).toEqual([]);
+    await page.close();
+  }, 60_000);
+
+  it("checks and fixes the document in the editor", async () => {
+    // Everything above the surface is unchanged: `useReCite` still calls
+    // read/apply/reveal and does not know which host it has.
+    const { page } = await open();
+    // `(U.S. 1999)` after a U.S. Reports citation is CT005, and its fix is
+    // safe: the reporter already said which court it was.
+    await openDocument(page, "Doe v. Roe, 526 U.S. 795 (U.S. 1999).");
+
+    await page.click("button:has-text('Check citations')");
+    await waitForMatch(page, ".status", /finding/i, 20_000);
+
+    await page.click("button:has-text('Fix')");
+    await waitForMatch(page, ".status", /Applied/i, 20_000);
+    expect(await page.locator(".page").textContent()).toContain("526 U.S. 795 (1999)");
+    await page.close();
+  }, 60_000);
+
+  it("marks findings in the text without putting anything in the document", async () => {
+    // Painted through the CSS Custom Highlight API, so ReCite's own markup
+    // never reaches the saved file and the caret does not move on a re-check.
+    const { page } = await open();
+    await openDocument(page, "Doe v. Roe, 526 U.S. 795 (U.S. 1999).");
+    await page.click("button:has-text('Check citations')");
+    await waitForMatch(page, ".status", /finding/i, 20_000);
+
+    // A string rather than a function: evaluating a page-side callback would
+    // need the DOM lib in this project, and a Node build tool could then
+    // reference `document` and still typecheck.
+    expect(await page.evaluate("CSS.highlights.size")).toBeGreaterThan(0);
+
+    expect(await page.locator(".page").innerHTML()).not.toMatch(/recite-/);
+    await page.close();
+  }, 60_000);
+
+  it("keeps formatting applied in the editor when the file is saved", async () => {
+    const { page } = await open();
+    await openDocument(page, "The pleading standard is set out in Iqbal.");
+
+    // Double-click selects a word, which is the selection the toolbar acts on.
+    await page.locator(".page p").first().dblclick();
+    await page.click("button[aria-label^='Bold']");
+    expect(await page.locator(".page strong").count()).toBeGreaterThan(0);
+
+    // HTML rather than .docx because a ZIP's bytes are deflated, and the point
+    // is the whole chain — DOM to model to writer.
+    await page.selectOption(".saveas select", "html");
+    const [download] = await Promise.all([
+      page.waitForEvent("download", { timeout: 20_000 }),
+      page.click(".saveas button"),
+    ]);
+
+    const stream = await download.createReadStream();
+    const chunks: Buffer[] = [];
+    for await (const chunk of stream) chunks.push(chunk as Buffer);
+    expect(Buffer.concat(chunks).toString("utf8")).toContain("<strong>");
+
+    expect(offOrigin()).toEqual([]);
+    await page.close();
+  }, 60_000);
+
+  it("goes back to a text box on request, and forward again", async () => {
+    // Neither surface is a trap.
+    const { page } = await open();
+    await openDocument(page, "Iqbal, 556 U.S. 662 (2009).");
+
+    await page.locator("label:has-text('Edit as plain text') input").check();
+    expect(await page.locator("textarea").inputValue()).toContain("556 U.S. 662");
+
+    await page.locator("label:has-text('Edit as plain text') input").uncheck();
+    expect(await page.locator(".page").textContent()).toContain("556 U.S. 662");
     await page.close();
   }, 60_000);
 
@@ -307,7 +408,7 @@ describe.skipIf(!runnable)("the published site in a browser", () => {
     // is that recognisable citation text comes back at all.
     const recognised = await waitForMatch(
       page,
-      "textarea",
+      ".page",
       /F\.?\s?3d|366|Miller/i,
       240_000,
     );
@@ -338,7 +439,7 @@ describe.skipIf(!runnable)("the published site in a browser", () => {
       mimeType: "application/pdf",
       buffer: pdf,
     });
-    const text = await waitForMatch(page, "textarea", /Griggs/, 300_000);
+    const text = await waitForMatch(page, ".page", /Griggs/, 300_000);
 
     expect(text).toContain("181 F.3d 694");
     // The repair fired, or did not need to. Either way no invented section.
