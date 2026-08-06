@@ -29,7 +29,13 @@ const ROOT = join(HERE, "..", "..");
 const require = createRequire(import.meta.url);
 
 /** Every workspace manifest whose dependencies end up in a user's browser. */
-const SHIPPING = ["apps/web", "packages/core", "packages/rules", "packages/engine"];
+const SHIPPING = [
+  "apps/web",
+  "packages/core",
+  "packages/rules",
+  "packages/engine",
+  "packages/courtlistener",
+];
 
 interface Manifest {
   readonly name?: string;

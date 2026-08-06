@@ -66,18 +66,25 @@ Failing it means it will not be.
 ## The data-handling questions
 
 Partner Center asks what data the add-in collects and transmits. For ReCite the
-answers are unusually short, and it is worth being precise rather than
-modest — the answer is genuinely "none", and that is checkable.
+answers are unusually short, and it is worth being precise rather than modest —
+document content is genuinely never transmitted, and that is checkable. Answer
+the external-services question fully rather than leaning on "none": the add-in
+can call one service, and a reviewer who finds an undeclared origin in the CSP
+will treat everything else in the submission as suspect.
 
-| Question                                    | Answer                                                                                                                                           |
-| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Does the add-in collect personal data?      | No.                                                                                                                                              |
-| Does it transmit document content anywhere? | No. There is no server. `connect-src 'none'` in the Content Security Policy means the browser refuses to open a connection.                      |
-| Does it use cookies or local storage?       | No. Nothing is persisted between sessions.                                                                                                       |
-| Does it use analytics or telemetry?         | No.                                                                                                                                              |
-| Does it require sign-in?                    | No. There are no accounts.                                                                                                                       |
-| Which external services does it call?       | One: `office.js` from Microsoft's own CDN, which Office requires be loaded rather than bundled. No document content is involved in that request. |
-| Where is data stored?                       | Nowhere. Document text exists only in page memory and is gone when the pane closes.                                                              |
+| Question                                    | Answer                                                                                                                                                                                                                                                          |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Does the add-in collect personal data?      | No.                                                                                                                                                                                                                                                             |
+| Does it transmit document content anywhere? | No. There is no ReCite server. Document text is never sent, with the citation check on or off.                                                                                                                                                                  |
+| Does it use cookies or local storage?       | No. Nothing is persisted between sessions, including the API token below.                                                                                                                                                                                       |
+| Does it use analytics or telemetry?         | No.                                                                                                                                                                                                                                                             |
+| Does it require sign-in?                    | No. There are no accounts. An optional feature takes a CourtListener API token, which the user supplies and which is not an account with us.                                                                                                                    |
+| Which external services does it call?       | Two, and the CSP permits no others. `office.js` from Microsoft's own CDN, which Office requires be loaded rather than bundled. And `courtlistener.com`, **only** when the user has supplied an API token, carrying the volume, reporter and page of a citation. |
+| Where is data stored?                       | Nowhere. Document text exists only in page memory and is gone when the pane closes.                                                                                                                                                                             |
+
+The pane's policy is `connect-src https://www.courtlistener.com` — one origin,
+no wildcard, and not even `'self'`. `docs/courtlistener.md` sets out what that
+feature sends and what the change costs.
 
 `docs/compliance.md` covers the same ground in the form a law firm's security
 review asks for it, including what GitHub Pages and Microsoft can observe.

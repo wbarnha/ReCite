@@ -22,12 +22,38 @@ through the Microsoft 365 admin centre instead.
 
 ## What it can see, and what it sends
 
-The add-in requests `ReadWriteDocument`, which is what it needs to read the text
-and apply a fix. It sends nothing anywhere: the parser, the rule set and the
-corpus check all run in the pane. There is no server to send anything to.
+The add-in requests `ReadWriteDocument`, which is what it needs to read the
+text, apply a fix and insert a comment. **Your document text is sent nowhere**:
+the parser and the rule set run in the pane.
 
-The one external request is `office.js` from Microsoft's CDN, which Office
-requires — an add-in may not bundle its own copy.
+Two external requests are possible, and only two — the pane's Content Security
+Policy sets `connect-src https://www.courtlistener.com`, without even
+`'self'`, so the browser inside Word will refuse anything else:
+
+- `office.js` from Microsoft's CDN, which Office requires — an add-in may not
+  bundle its own copy.
+- CourtListener, **only** once you have pasted an API token, and only ever
+  carrying a volume, a reporter abbreviation and a page.
+
+See [courtlistener.md](courtlistener.md) for what that feature does and what it
+costs.
+
+## Comments
+
+With CourtListener on, **Comment pincites** reads the page each pin cite points
+at and inserts the passage as a **Word comment**, anchored to the citation it
+is about. It is a comment, not an edit: not a character of the document
+changes, which is why it is not held behind the review checkbox that governs
+fixes.
+
+Comments need the **WordApi 1.4** requirement set, which is where
+`Range.insertComment` arrived. Where it is not available — an older desktop
+build, or Word on the web in some tenants — the pane says so and points at the
+web app, which writes the same comments into a saved `.docx`. Failing at that
+point is better than discovering it halfway through a document.
+
+Anchoring uses the same "find the Nth occurrence" manoeuvre a correction uses,
+for the reason described below.
 
 ## How a fix is applied
 

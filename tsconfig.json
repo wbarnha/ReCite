@@ -3,6 +3,7 @@
   "references": [
     { "path": "./packages/core" },
     { "path": "./packages/rules" },
+    { "path": "./packages/courtlistener" },
     { "path": "./packages/engine" },
     { "path": "./apps/web" },
 
@@ -12,6 +13,7 @@
     // rules, which need a project per file, skip them too.
     { "path": "./packages/core/test" },
     { "path": "./packages/rules/test" },
+    { "path": "./packages/courtlistener/test" },
     { "path": "./packages/engine/test" },
     { "path": "./apps/web/test" },
     { "path": "./tools" }

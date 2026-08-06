@@ -1,6 +1,6 @@
 import { useCallback, useId, useState } from "react";
 
-import type { ExportFormat, ReportContext } from "../export/index.js";
+import type { DocumentComment, ExportFormat, ReportContext } from "../export/index.js";
 import {
   baseName,
   buildExport,
@@ -8,6 +8,11 @@ import {
   EXPORT_FORMATS,
   isReport,
 } from "../export/index.js";
+
+/** Formats with a real comment feature to write a note into. */
+function carriesComments(format: ExportFormat): boolean {
+  return format.id === "docx" || format.id === "odt";
+}
 
 /**
  * Save the document, or the findings, in a chosen format.
@@ -18,10 +23,13 @@ import {
 export function SaveAs({
   text,
   context,
+  comments = [],
   disabled = false,
 }: {
   text: string;
   context: ReportContext;
+  /** Pincite notes to write into the file, for the formats that carry one. */
+  comments?: readonly DocumentComment[];
   disabled?: boolean;
 }) {
   const selectId = useId();
@@ -34,7 +42,7 @@ export function SaveAs({
   const save = useCallback(async () => {
     setError("");
     try {
-      const blob = await buildExport(format, text, context);
+      const blob = await buildExport(format, text, context, comments);
       const suffix = isReport(format) ? "-citation-report" : "-checked";
       downloadBlob(
         blob,
@@ -43,7 +51,7 @@ export function SaveAs({
     } catch (problem) {
       setError(problem instanceof Error ? problem.message : String(problem));
     }
-  }, [format, text, context]);
+  }, [format, text, context, comments]);
 
   const empty = text.trim().length === 0;
   const noFindings = isReport(format) && context.findings.length === 0;
@@ -82,6 +90,16 @@ export function SaveAs({
       <p className="saveas-note">
         {format.note}
         {noFindings && " Nothing has been checked yet, so the report will be empty."}
+        {comments.length > 0 && !carriesComments(format) && !isReport(format) && (
+          <>
+            {" "}
+            <strong>
+              This format has no notion of a comment, so the {comments.length} pincite{" "}
+              {comments.length === 1 ? "note" : "notes"} will not be in it.
+            </strong>{" "}
+            Choose Word or OpenDocument to keep them.
+          </>
+        )}
       </p>
       {error && (
         <p className="filedrop-error" role="alert">

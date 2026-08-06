@@ -4,10 +4,18 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <!--
-      No script, style, image or connection may come from anywhere but this
-      origin and Microsoft's Office CDN. The page never contacts a server of
-      its own, so `connect-src` is closed entirely; a bug or a compromised
-      dependency cannot quietly post the document somewhere.
+      No script, style, image or connection may come from anywhere this policy
+      does not name.
+
+      `connect-src` is a single origin — not even `'self'`. The pane has
+      nothing of its own to load, because Word hands it the document; the one
+      thing it can reach is CourtListener, and only once the user has pasted an
+      API token. What goes there is a volume, a reporter and a page. The
+      document text has no route out of this pane at all, and that is a
+      property of the policy rather than of our good intentions.
+
+      This used to read `connect-src 'none'`, which was a stronger claim, and
+      the change is stated rather than glossed: see docs/compliance.md.
 
       `frame-ancestors` is deliberately absent: it is ignored when delivered in
       a meta element, so including it would only log an error. Framing has to
@@ -17,7 +25,7 @@
     -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'none'; script-src 'self' https://appsforoffice.microsoft.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'none'; form-action 'none'; base-uri 'none'"
+      content="default-src 'none'; script-src 'self' https://appsforoffice.microsoft.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src https://www.courtlistener.com; form-action 'none'; base-uri 'none'"
     />
     <title>ReCite for Word</title>
     <!--

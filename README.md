@@ -4,19 +4,30 @@
 Microsoft Word. A linter for legal writing: it reads a brief, tells you which
 citations are wrong, and corrects the ones it can correct safely.
 
-> ### Everything runs in your browser
+> ### Your document runs in your browser
 >
-> There is no ReCite server. No account, no upload, no database, no API. Open a
-> file or paste text and it is read into memory in the page, checked, and gone
-> when you close the tab. It is never transmitted anywhere. That includes
-> scanned PDFs, which are read by an OCR engine that also runs in the page.
+> There is no ReCite server. No account, no upload, no database. Open a file or
+> paste text and it is read into memory in the page, checked, and gone when you
+> close the tab. It is never transmitted anywhere. That includes scanned PDFs,
+> which are read by an OCR engine that also runs in the page.
 >
-> This is not only a promise — the page ships a Content Security Policy with
-> `connect-src 'self'`, so **the browser itself refuses any request to another
-> origin**. The Word add-in is stricter still (`connect-src 'none'`), because
-> Word hands it the document and it has nothing to load. A test loads the built
-> site in a real browser, intercepts every request, and fails if one leaves the
-> origin.
+> **One optional feature contacts one outside service.** Supply a
+> [CourtListener](https://www.courtlistener.com/) API token and ReCite will
+> check that the cases you cite actually exist, and read the page a pin cite
+> points at. What it sends is a **volume, a reporter and a page** —
+> `volume=410&reporter=U.S.&page=113` — and never a word of your document.
+> It is off until you switch it on.
+>
+> This is not only a promise. The page ships a Content Security Policy with
+> `connect-src 'self' https://www.courtlistener.com`, so **the browser itself
+> refuses a request to any other host**. The Word add-in is stricter still —
+> `connect-src https://www.courtlistener.com`, without even `'self'`, because
+> Word hands it the document and it has nothing of its own to load. A test
+> loads the built site in a real browser, intercepts every request, and fails
+> if one goes anywhere it should not.
+>
+> Full detail: [**docs/courtlistener.md**](docs/courtlistener.md), including
+> what the change to that policy costs and what survives it.
 >
 > Working with privileged material? See
 > [**docs/compliance.md**](docs/compliance.md) — written for a law firm's
@@ -43,8 +54,10 @@ and nothing about its shape says so.
 
 And a citation can be flawless in form and refer to no case whatsoever, which
 is exactly the failure mode of a fabricated one. ReCite catches the first three
-kinds with no network access at all; the fourth needs an authority list, and
-the tool is candid about the difference.
+kinds with no network access at all. The fourth needs something that knows what
+exists — an authority list you supply, or
+[CourtListener](docs/courtlistener.md) — and the tool is candid about the
+difference.
 
 ## What it checks
 
@@ -68,7 +81,7 @@ the tool is candid about the difference.
 | `ST007` | section-range-digits         | `§§ 103-07` — a section span keeps every digit         |
 | `AU001` | non-precedential-disposition | an unpublished order cited as authority                |
 | `AU002` | database-only-citation       | `2019 WL 4639462` with no reporter cite                |
-| `VF001` | unverified-authority         | a citation absent from your authority list             |
+| `VF001` | unverified-authority         | a citation absent from the authority source            |
 | `VF002` | ambiguous-authority          | a citation matching several cases                      |
 | `VF003` | case-name-mismatch           | a real citation attached to the wrong case name        |
 | `VF004` | year-mismatch                | a year the record disagrees with                       |
@@ -99,6 +112,46 @@ Page ranges are read with any dash a document might contain — hyphen, en dash,
 em dash, figure dash, non-breaking hyphen — because losing the dash means
 losing the pin cite, and losing the pin cite means the page checks silently
 stop running.
+
+## Does the case exist?
+
+Every rule above is about form, and a fabricated citation with a plausible
+reporter, court and year passes all of them. Answering the other question means
+looking the citation up, so **Verify cases against** offers three answers:
+
+| Source            | What "absent" means                                    |
+| ----------------- | ------------------------------------------------------ |
+| nothing           | not checked; every offline rule still runs             |
+| a list you supply | absent from that list — as complete as whoever made it |
+| **CourtListener** | absent from a public database of American case law     |
+
+CourtListener is free, run by the [Free Law Project](https://free.law/) — who
+also maintain the reporter table ReCite already uses — and needs an
+[API token](https://www.courtlistener.com/help/api/rest/). With one pasted in,
+the six fabricated cases in the _Mata_ filing come back **not found**, which is
+the answer nothing else in this tool can give you.
+
+It is the only feature that contacts anyone, so it is off by default, and what
+it sends is a volume, a reporter and a page. Never your document.
+
+### Pincites, as comments
+
+With CourtListener on, **Pull pincites** reads the page each pin cite points at
+and shows you the passage. `Miller, 174 F.3d at 371` stops being a page number
+you have to trust and becomes a sentence you can read next to the proposition
+it is cited for.
+
+Each quotation is written into the saved `.docx` or `.odt` as a **real
+comment**, in the margin next to the citation — so it survives being emailed to
+someone who has never heard of ReCite. In the Word add-in they become Word
+comments in the open document. A comment never changes a character of the text.
+
+Where a page is not marked in CourtListener's copy of the opinion, ReCite says
+so and quotes nothing. A quotation attributed to the wrong page is worse than
+no quotation, and it is the kind of wrong that survives into a filing.
+
+See [docs/courtlistener.md](docs/courtlistener.md) for the rate limits, the
+status mapping, and what the policy change costs.
 
 ## Opening a document
 
@@ -173,8 +226,9 @@ the one where **ReCite does not report the fabricated cases**. `925 F.3d 1339
 (11th Cir. 2019)` is not a real citation, but the volume is plausible, the
 series was running in 2019, and the Eleventh Circuit publishes there. Every
 offline rule passes, because every offline rule is about form. Catching a
-fabrication needs an authority list to check against — which is the whole
-lesson, and the reason the walkthrough exists.
+fabrication needs something that knows what exists — which is the whole lesson,
+the reason the walkthrough exists, and the reason
+[the CourtListener check](#does-the-case-exist) does.
 
 ## Saving
 
@@ -184,6 +238,11 @@ Choose a format under **Save as**:
 | --------------- | ------------------------------------------------- |
 | Document        | `.txt` `.md` `.docx` `.odt` `.rtf` `.html` `.pdf` |
 | Findings report | JSON, CSV, Markdown                               |
+
+Pincite quotations ride along as real comments in `.docx` and `.odt`, and as
+data in every report format. The other formats have no notion of a comment, and
+ReCite does not invent one — the **Save as** note says so rather than dropping
+them quietly.
 
 The list mirrors what ReCite can read, because a tool that opens a `.docx` and
 can only hand back a `.txt` has quietly lost the user's format. The writers are
@@ -282,9 +341,10 @@ dependencies; React and Vite live only in the app.
 
 ```
 packages/
-├── core/     model, regex parser, reporter + court tables, span patching
-├── rules/    the 19-rule set — the only place that decides "wrong"
-└── engine/   check/fix orchestration
+├── core/          model, regex parser, reporter + court tables, span patching
+├── rules/         the 19-rule set — the only place that decides "wrong"
+├── engine/        check/fix orchestration
+└── courtlistener/ the only package that can open a connection
 apps/
 └── web/      the web app and the Word task pane, from one build
 tools/
@@ -298,9 +358,12 @@ tools/
 ```
 
 The dependency graph is the design: `rules` depends only on `core`, so a rule
-_cannot_ touch the network or the filesystem — nothing in its scope can.
-Verification results reach it as plain data, so the rule set and whatever
-supplies the authority list know nothing about each other.
+_cannot_ touch the network or the filesystem — nothing in its scope can. That
+is why `courtlistener` is a sibling rather than a layer: it depends on `core`
+too, and nothing in `rules` can reach it. Verification results arrive as plain
+data, so the rule set and whatever supplied the authority list know nothing
+about each other — which is why pointing `VF001` at a real database took no
+change to a single rule.
 
 ## Develop
 
@@ -363,6 +426,10 @@ public court filing; see [docs/testing.md](docs/testing.md).
   up when an unknown reporter is a near-miss for a known one.
 - **A clean run is not a guarantee.** ReCite proves specific things are wrong.
   It cannot prove a citation is right, and it is not legal advice.
+- **Absence from CourtListener is not proof of fabrication**, and a quotation
+  it pulls is evidence to check rather than a substitute for reading the
+  opinion. It is also not a citator: nothing here tells you an authority has
+  been overruled.
 
 ## Licence
 

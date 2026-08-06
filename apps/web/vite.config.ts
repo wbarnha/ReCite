@@ -74,6 +74,9 @@ export default defineConfig(({ mode }) => ({
       "@recite/engine": fileURLToPath(
         new URL("../../packages/engine/src/index.ts", import.meta.url),
       ),
+      "@recite/courtlistener": fileURLToPath(
+        new URL("../../packages/courtlistener/src/index.ts", import.meta.url),
+      ),
     },
   },
   // Scribe's OCR workers are ES modules and use top-level `await`, which the

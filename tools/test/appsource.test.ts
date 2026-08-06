@@ -149,15 +149,42 @@ describe("the static pages", () => {
     expect(html).toMatch(/<h1>[^<]+<\/h1>/);
   });
 
+  const privacyBody = () => {
+    // The body only. `renderPage` wraps every page in its own restrictive
+    // policy, so searching the whole document for a CSP directive finds the
+    // page's own header rather than the sentence describing the app's — which
+    // is how this test used to pass without reading a word of the prose.
+    const html = rendered.find(([file]) => file === "privacy.html")?.[1] ?? "";
+    return html.slice(html.indexOf("<h1"));
+  };
+
   it("states the guarantee the whole design rests on", () => {
-    const privacy = rendered.find(([file]) => file === "privacy.html")?.[1] ?? "";
-    expect(privacy).toMatch(/connect-src 'none'/);
+    const privacy = privacyBody();
     expect(privacy).toMatch(/never (?:uploaded|transmitted)/i);
-    // The two parties that genuinely can observe a request must be named
-    // rather than glossed. A privacy policy that overclaims is worse than one
-    // that admits a boundary.
+    // The exact policy the app ships, quoted. A reader is told to check it in
+    // view-source, so the two have to agree.
+    expect(privacy.replace(/\s+/g, " ")).toContain(
+      "connect-src 'self' https://www.courtlistener.com",
+    );
+    // The parties that genuinely can observe a request must be named rather
+    // than glossed. A privacy policy that overclaims is worse than one that
+    // admits a boundary.
     expect(privacy).toMatch(/GitHub/);
     expect(privacy).toMatch(/Microsoft/);
+    expect(privacy).toMatch(/CourtListener/);
+  });
+
+  it("says what the one outbound feature sends, and that it is off by default", () => {
+    // The single most consequential sentence on the page for a firm deciding
+    // whether this may touch a client document.
+    const privacy = privacyBody();
+    const flat = privacy.replace(/\s+/g, " ");
+    expect(flat).toMatch(/off until you turn it on/i);
+    expect(flat).toMatch(/volume, a reporter abbreviation and a page/i);
+    expect(flat).toMatch(/What is never sent/i);
+    // And that the credential is not persisted, which is the other question a
+    // reviewer will ask.
+    expect(flat).toMatch(/token is held in the tab's memory/i);
   });
 
   it("does not promise the tool verifies a case exists", () => {

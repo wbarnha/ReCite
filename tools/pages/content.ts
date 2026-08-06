@@ -22,14 +22,19 @@ const privacy: Page = {
   lede: `ReCite does not collect, store, transmit, or have any access to the
     documents you check — including files you open and scanned PDFs it reads
     with OCR. Everything runs inside your browser, or inside your copy of
-    Microsoft Word. There is no ReCite server for your text to be sent to.`,
+    Microsoft Word. There is no ReCite server for your text to be sent to. One
+    optional feature contacts one outside service; it is described in full
+    below, and it is off unless you switch it on.`,
   body: `
     <h2>What ReCite does with your document</h2>
     <p>
-      Nothing leaves the page. When you paste text, open a file, or use the task
-      pane in Word, the document is read into memory, checked, and discarded
-      when you close the tab or pane. It is never uploaded, never written to
-      disk by ReCite, and never shared with anyone.
+      Your document does not leave the page. When you paste text, open a file,
+      or use the task pane in Word, it is read into memory, checked, and
+      discarded when you close the tab or pane. It is never uploaded, never
+      written to disk by ReCite, and never shared with anyone. That is true
+      whether or not you switch on the CourtListener check described below,
+      which sends the numbers and abbreviation of a citation and no part of
+      your text.
     </p>
     <p>
       That includes files you open. A Word document, PDF, RTF or OpenDocument
@@ -43,13 +48,16 @@ const privacy: Page = {
       Closing the page ends everything.
     </p>
     <p>
-      The web app is allowed to load its own code from its own address and
-      nothing else. Its Content Security Policy sets
-      <code>connect-src 'self'</code>, so your browser refuses every request it
-      might make to any other site. That is a restriction enforced by the
-      browser, not a promise made by us. The Word add-in is stricter still —
-      <code>connect-src 'none'</code> — because Word hands it the document
-      directly and it has nothing to load.
+      The web app is allowed to load its own code from its own address, and to
+      reach exactly one other host: CourtListener, and only when you have
+      supplied an API token. Its Content Security Policy sets
+      <code>connect-src 'self' https://www.courtlistener.com</code>, so your
+      browser refuses every request it might make to anywhere else. That is a
+      restriction enforced by the browser, not a promise made by us. The Word
+      add-in is stricter still — <code>connect-src
+      https://www.courtlistener.com</code>, without even
+      <code>'self'</code> — because Word hands it the document directly and it
+      has nothing of its own to load.
     </p>
     <p>
       The one thing the web app does load from its own address is the OCR
@@ -72,8 +80,8 @@ const privacy: Page = {
     <h2>What third parties can see</h2>
     <p>
       ReCite is a static website. Delivering it to you involves two other
-      companies, and we would rather state plainly what each can observe than
-      imply the answer is nothing:
+      organisations, and one optional feature involves a third. We would rather
+      state plainly what each can observe than imply the answer is nothing:
     </p>
     <div class="wrap">
     <table>
@@ -102,14 +110,27 @@ const privacy: Page = {
           </td>
           <td>No</td>
         </tr>
+        <tr>
+          <td>
+            CourtListener (Free Law Project) — <strong>only if you supply an API
+            token</strong>
+          </td>
+          <td>
+            The volume, reporter and page of each citation you ask it to check,
+            your API token, and the identifier of any opinion you ask it to
+            quote. Plus the same ordinary request data as above.
+          </td>
+          <td>No</td>
+        </tr>
       </tbody>
     </table>
     </div>
     <p>
-      Both can see that <em>someone</em> loaded ReCite. Neither sees a word of
-      what you check with it. The web app does not load
+      All three can see that <em>someone</em> made a request. None of them sees
+      a word of your document. The web app does not load
       <code>office.js</code> at all — that request happens only inside
-      Microsoft Word.
+      Microsoft Word — and neither surface contacts CourtListener until you
+      have pasted a token.
     </p>
 
     <h2>Your authority list</h2>
@@ -119,12 +140,85 @@ const privacy: Page = {
       discarded when you close the page.
     </p>
 
+    <h2>Checking citations against CourtListener</h2>
+    <div class="panel">
+      <p>
+        <strong>This is the only feature in ReCite that contacts anyone, and it
+        is off until you turn it on.</strong> It needs an API token from
+        CourtListener, which you have to obtain and paste in. Without one, no
+        request is made — the code refuses to build a client at all.
+      </p>
+    </div>
+    <p>
+      A citation can be perfectly formed and refer to no case whatsoever, and
+      no amount of offline checking will catch that. Proving a case exists
+      means looking it up. CourtListener is a free public database of American
+      case law, run by the
+      <a href="https://free.law/">Free Law Project</a>, a non-profit; ReCite
+      can ask it whether a citation matches a decision, and can read the page a
+      pin cite points at so the passage can be attached to your document as a
+      comment.
+    </p>
+    <p><strong>What is sent, when the feature is on:</strong></p>
+    <ul>
+      <li>
+        The <em>components of a citation</em> — a volume, a reporter
+        abbreviation and a page. For <code>410 U.S. 113</code> that is
+        <code>volume=410&amp;reporter=U.S.&amp;page=113</code>, and nothing
+        else. You can watch this in your browser's network panel.
+      </li>
+      <li>
+        The <em>identifier of an opinion</em> whose text you asked ReCite to
+        quote, which comes from CourtListener's own answer to the citation
+        above.
+      </li>
+      <li>
+        Your <em>API token</em>, which is how CourtListener knows the request
+        is yours.
+      </li>
+    </ul>
+    <p><strong>What is never sent:</strong> your document. Not a sentence, not
+      a paragraph, not a case name, not a heading. CourtListener's API offers
+      an endpoint that takes a block of text and finds the citations in it —
+      which would be fewer requests, and would mean posting your brief to a
+      third party. ReCite does not use it, and there is no code path by which
+      it could: the request body is built by one short function that takes a
+      volume, a reporter and a page as its arguments.
+    </p>
+    <p>
+      Your token is held in the tab's memory and written nowhere — no cookie,
+      no <code>localStorage</code>, no IndexedDB. Closing the page forgets it,
+      and you will paste it again next time. That is deliberate: a token is a
+      credential, and a credential in browser storage outlives the session that
+      needed it.
+    </p>
+    <p>
+      CourtListener will see the requests you make, subject to
+      <a href="https://www.courtlistener.com/terms/">their terms and privacy
+      policy</a>. What they can infer is that someone holding your token
+      checked those citations. If the fact that you are researching a
+      particular authority is itself sensitive, that is a reason not to switch
+      this on — and it stays off by default for exactly that reason.
+    </p>
+    <p>
+      <strong>A quotation is not a verification.</strong> ReCite reads the page
+      a pin cite names, using the star pagination in CourtListener's copy of
+      the opinion. Where that page is not marked, it says so rather than
+      quoting the nearest paragraph. Either way, check it against the reporter
+      before you rely on it.
+    </p>
+
     <h2>Legal professional privilege</h2>
     <p>
       ReCite is built for people who work with privileged and confidential
       material. Because no document text is transmitted, using ReCite does not
       disclose your document to any third party, and does not create a
-      processor or subprocessor relationship with anyone. See the
+      processor or subprocessor relationship with anyone. That holds with the
+      CourtListener check switched on as well: a volume, a reporter and a page
+      identify a published decision, not your client. Whether the <em>pattern</em>
+      of authorities you look up is itself sensitive is a judgement only you can
+      make, which is why the feature is opt-in and says what it sends at the
+      point where you switch it on. See the
       <a href="${REPO}/blob/main/docs/compliance.md">compliance notes</a> for
       the detail a firm's security review will want.
     </p>
@@ -184,13 +278,24 @@ const terms: Page = {
     </div>
     <ul>
       <li>
-        It does not verify that a cited case exists, unless you supply an
-        authority list to check against. A fabricated citation with a plausible
-        reporter, court and year will pass every offline rule.
+        It does not verify that a cited case exists, unless you point it at
+        something that knows — an authority list you supply, or CourtListener
+        with an API token. A fabricated citation with a plausible reporter,
+        court and year will pass every offline rule.
+      </li>
+      <li>
+        A citation that CourtListener does <em>not</em> hold is not thereby
+        proved false. No collection of case law is complete, and ReCite reports
+        absence as absence rather than as fabrication.
       </li>
       <li>
         It does not read the cited case, and cannot tell you whether the case
-        says what your brief says it says.
+        says what your brief says it says. It <em>can</em> quote the page a pin
+        cite points at, which is a different and much smaller claim: those are
+        the words printed on that page, put in front of you so that you can
+        judge whether they support the sentence citing them. Where the page is
+        not marked in the source ReCite has, it says so instead of quoting
+        something near it.
       </li>
       <li>
         It does not check whether an authority is still good law. Nothing here
@@ -410,20 +515,66 @@ const tutorial: Page = {
       that means a source of truth ReCite does not carry.
     </p>
 
-    <h2>5. Check against an authority list</h2>
+    <h2>5. Check that the cases exist</h2>
     <p>
-      This is the part that catches a fabrication. Tick <strong>Also check
-      against the sample authority list</strong>. Every citation not in the list
-      is now reported as unverified — including the invented ones.
+      This is the part that catches a fabrication. Under <strong>Verify cases
+      against</strong> there are two ways to do it, and the difference between
+      them is the difference between a prompt and a finding.
     </p>
     <p>
-      The sample list holds five cases, so on a real brief nearly everything
-      will be flagged. That is the honest behaviour: it is a prompt to check by
-      hand, not evidence a case is fake. Supplying a real list — an export from
-      whatever database your firm uses — is what makes this check sharp.
+      <strong>The five-case sample list</strong> shows the mechanism. Every
+      citation not in the list is reported as unverified — including the
+      invented ones, but also including nearly everything else, because the list
+      holds five cases. That is the honest behaviour: it is a prompt to check by
+      hand, not evidence a case is fake.
+    </p>
+    <p>
+      <strong>CourtListener</strong> is the version that is actually useful. It
+      is a free public database of American case law run by the Free Law
+      Project, and with an
+      <a href="https://www.courtlistener.com/help/api/rest/">API token</a>
+      pasted into the box, ReCite looks up every citation in the document. On
+      this filing the six fabricated cases come back <em>not found</em> — which
+      is the answer nothing else on this page could give you.
+    </p>
+    <div class="panel">
+      <p>
+        <strong>This is the one thing ReCite sends anywhere.</strong> What goes
+        to CourtListener is the volume, the reporter and the page —
+        <code>925</code>, <code>F.3d</code>, <code>1339</code> — and your token.
+        Not a word of the document. See the
+        <a href="privacy.html">privacy policy</a>, which sets out exactly what
+        is sent and how the browser is configured to refuse anything else.
+      </p>
+    </div>
+    <p>
+      Absence from CourtListener is still absence, not proof: no collection is
+      complete. But a citation that a database of millions of decisions has
+      never heard of is worth ten minutes of your attention, and that is the
+      whole job.
     </p>
 
-    <h2>6. Fix what is safe</h2>
+    <h2>6. Pull the pincites</h2>
+    <p>
+      With CourtListener on, <strong>Pull pincites</strong> reads the page each
+      pin cite points at and shows you the passage. <em>Miller</em> at 371 is no
+      longer a page number you have to trust — it is a sentence you can read
+      next to the proposition it is cited for.
+    </p>
+    <p>
+      Each quotation is written into the saved <code>.docx</code> or
+      <code>.odt</code> as a real comment, in the margin next to the citation,
+      so it survives being emailed to somebody who has never heard of this tool.
+      In the Word add-in they become Word comments in the open document.
+    </p>
+    <p>
+      Where a page is not marked in CourtListener's copy of the opinion, ReCite
+      says so and quotes nothing. A quotation attributed to the wrong page is
+      worse than no quotation, and it is the kind of wrong that survives all the
+      way into a filing.
+    </p>
+
+    <h2>7. Fix what is safe</h2>
     <p>
       <strong>Fix</strong> applies only corrections that change how a citation
       is spelled, never which authority it points at: spacing, abbreviation,
@@ -436,7 +587,7 @@ const tutorial: Page = {
       you.
     </p>
 
-    <h2>7. Save it</h2>
+    <h2>8. Save it</h2>
     <p>
       Choose a format under <strong>Save as</strong> and press
       <strong>Download</strong>. The document comes back as
@@ -447,8 +598,9 @@ const tutorial: Page = {
     <p>
       You can also save the <strong>findings report</strong> — as JSON for
       another tool, CSV for a spreadsheet, or Markdown to paste into a memo. The
-      report records which build produced it, so a note in a file can be traced
-      back to an exact commit.
+      report records which build produced it, which reporter table it used, and
+      what the citations were verified against, so a note in a file can be
+      traced back to an exact commit and an exact source.
     </p>
     <p>
       Everything is written in the page and handed to your browser as a
@@ -463,8 +615,9 @@ const tutorial: Page = {
         abbreviations, short forms pointing at nothing.
       </li>
       <li>
-        It cannot catch a <strong>fabrication</strong> without a list of real
-        authorities to check against. Supply one.
+        It cannot catch a <strong>fabrication</strong> without something that
+        knows what exists. Point it at CourtListener, or at your firm's own
+        list of authorities.
       </li>
       <li>
         <strong>A clean run is not a verification.</strong> It proves specific

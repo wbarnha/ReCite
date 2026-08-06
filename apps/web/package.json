@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@recite/core": "workspace:*",
+    "@recite/courtlistener": "workspace:*",
     "@recite/engine": "workspace:*",
     "@recite/rules": "workspace:*",
     "pdfjs-dist": "^6.2.108",
