@@ -34,12 +34,7 @@ import { type Server } from "node:http";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { BASE_PATH, serveSite, siteIsBuilt } from "./helpers/site-server.js";
-import {
-  reachable,
-  waitFor,
-  waitForElement,
-  WebDriverSession,
-} from "./helpers/webdriver.js";
+import { reachable, waitForElement, WebDriverSession } from "./helpers/webdriver.js";
 
 /**
  * Opt in explicitly.
@@ -92,8 +87,7 @@ describe.skipIf(!possible)("the published site in the Safari Apple ships", () =>
   /** Load the app fresh, with the error collector already listening. */
   async function open(): Promise<void> {
     await session.navigate(`${origin}${BASE_PATH}`);
-    await waitFor<string>(
-      session,
+    await waitForPage(
       "return document.querySelector('h1') ? document.querySelector('h1').textContent : ''",
       (text) => text === "ReCite",
       60_000,
@@ -138,6 +132,45 @@ describe.skipIf(!possible)("the published site in the Safari Apple ships", () =>
     expect(attached, `could not attach ${name}`).toBe("ok");
   }
 
+  /**
+   * Wait for the page, and say what it threw if the wait never finishes.
+   *
+   * The collector exists so a failure can name the exception, and the first
+   * version of this file wasted that: it read the errors only *after* a
+   * successful wait, so the one run that mattered — a four-minute timeout on
+   * the PDF — reported `Last value: ""` and threw the actual message away.
+   *
+   * Now the errors are read on every poll. A throw ends the wait immediately
+   * with the browser's own words, and a genuine timeout still reports whatever
+   * was recorded.
+   */
+  async function waitForPage(
+    script: string,
+    matches: (text: string) => boolean,
+    timeoutMs: number,
+    what: string,
+  ): Promise<string> {
+    const deadline = Date.now() + timeoutMs;
+    let last = "";
+
+    while (Date.now() < deadline) {
+      const thrown = await errors().catch(() => []);
+      if (thrown.length > 0) {
+        throw new Error(`${what}: the page threw — ${thrown.join("; ")}`);
+      }
+      last = await session.execute<string>(script);
+      if (matches(last)) return last;
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+
+    const thrown = await errors().catch(() => []);
+    throw new Error(
+      `${what} did not happen within ${timeoutMs}ms. ` +
+        `Last value: ${JSON.stringify(last).slice(0, 200)}. ` +
+        `Page errors: ${thrown.length > 0 ? thrown.join("; ") : "none recorded"}`,
+    );
+  }
+
   it("loads and runs without a script error", async () => {
     await open();
     expect(await errors()).toEqual([]);
@@ -160,8 +193,7 @@ describe.skipIf(!possible)("the published site in the Safari Apple ships", () =>
     );
     expect(check, "the Check citations button is missing").toBe(true);
 
-    await waitFor<string>(
-      session,
+    await waitForPage(
       "return document.querySelector('.status') ? document.querySelector('.status').textContent : ''",
       (text) => /citation/i.test(text),
       60_000,
@@ -174,8 +206,7 @@ describe.skipIf(!possible)("the published site in the Safari Apple ships", () =>
     await open();
     await openFile("brief.txt", "Iqbal, 556 U.S. 662, 678 (2009). Id. at 680.");
 
-    await waitFor<string>(
-      session,
+    await waitForPage(
       "return document.querySelector('.page') ? document.querySelector('.page').textContent : ''",
       (text) => text.includes("556 U.S. 662"),
       60_000,
@@ -191,15 +222,52 @@ describe.skipIf(!possible)("the published site in the Safari Apple ships", () =>
     await open();
     await openFile("brief.pdf", textLayerPdf("Miller, 174 F.3d 366 (2d Cir. 1999)."));
 
-    await waitFor<string>(
-      session,
+    await waitForPage(
       "return document.querySelector('.page') ? document.querySelector('.page').textContent : ''",
       (text) => /174 F\.?\s?3d 366/.test(text),
-      240_000,
+      120_000,
       "the PDF to be read",
     );
     expect(await errors(), "the PDF path threw in the browser Apple ships").toEqual([]);
   }, 300_000);
+
+  it("opens the example filing, scanned pages and all", async () => {
+    // The case a user actually reported: on iOS 26.5.4, pressing **Try the
+    // example filing** answers `undefined is not a function (near '...e of
+    // t...')` — JavaScriptCore's wording for iterating something with no
+    // iterator.
+    //
+    // Everything above this opens a PDF with a text layer, which never reaches
+    // the recognition engine. The example filing is eleven pages, part typed
+    // and part scanned exhibit, so it is the only fixture that runs
+    // `tesseract.js` — and the report says that is where the difference is.
+    // It is also reached by its own button rather than the file input, so this
+    // covers `loadExample` too.
+    //
+    // Slow on purpose. Recognising eleven pages is the point; a fast version
+    // of this test would be a version that does not run OCR, which is the
+    // thing under suspicion.
+    await open();
+
+    const pressed = await session.execute<boolean>(
+      "var b = Array.prototype.find.call(document.querySelectorAll('button')," +
+        " function (x) { return /Try the example filing/.test(x.textContent); });" +
+        " if (b) { b.click(); return true; } return false;",
+    );
+    expect(pressed, "the example filing button is missing").toBe(true);
+
+    // Errors are checked *while* it works, not only at the end: if the engine
+    // throws, the editor never fills and a plain wait would time out after ten
+    // minutes reporting nothing useful.
+    await waitForPage(
+      "return document.querySelector('.page') ? document.querySelector('.page').textContent : ''",
+      (text) => /Mata|Avianca|Varghese|F\.\s?3d/.test(text),
+      600_000,
+      "the example filing to be read",
+    );
+
+    expect(await errors(), "the example filing threw in Safari").toEqual([]);
+  }, 660_000);
 });
 
 /**
