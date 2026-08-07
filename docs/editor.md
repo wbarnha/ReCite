@@ -98,6 +98,42 @@ says so. That is a deliberate choice about what degrades: the findings panel
 still lists everything with a line and column, **Show** still selects the span,
 and nothing that decides whether a citation is wrong depends on any of it.
 
+### Blank lines, and what they cost to get wrong
+
+An empty paragraph is rendered `<p><br></p>`: an empty `<p>` collapses to
+nothing and the caret cannot reach it, so the filler `<br>` is what makes a
+blank line a line you can click into.
+
+The reader has to know that filler is not content, and getting it wrong has
+been expensive twice. Counting the filler as a line read one blank line as two,
+and the damage from a single character of drift is worth recording, because it
+is not obvious from the bug:
+
+- Every offset below the first blank line was out by one, so `rangeFor` refused
+  to resolve any of them — **findings painted nothing** below that point, and a
+  jump landed nowhere.
+- The text the editor derived from its own DOM had **doubled blank lines**, so
+  a document saved out of the editor came back with gaps twice the size, and
+  doubled again each time it went round.
+
+The rule is that a `<br>` ending its parent is filler — the enclosing block
+emits that paragraph as it closes — and only a `<br>` with something after it
+is a line of its own.
+
+Fixing that exposed a second bug underneath it. A guard at the end of `read`
+dropped a trailing empty paragraph, on the grounds that the walk left one
+behind — which it did, but only because of the doubling above. With the count
+correct there is no artefact to drop, so the guard could only ever fire on a
+blank line somebody had actually typed. It ate the one at the end of every
+document that had one.
+
+Both halves are pinned by browser tests, and the obvious test does not do the
+job: opening a file seeds the editor and hands the same string straight back to
+the panels beside it, so saving immediately never calls `read` and passes
+however broken the reader is. The test that earns its place applies a fix
+first — that reads the page, edits the model and renders it again, which is the
+route a user actually takes — and then compares the saved bytes.
+
 ### The DOM is the document
 
 While the editor is open, the `contenteditable` holds the document and React

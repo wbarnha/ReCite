@@ -161,20 +161,17 @@ export function read(host: HTMLElement): RichDocument {
   };
 
   walk(host, NONE);
+  // Text after the last block belongs to a paragraph of its own, and a host
+  // with nothing in it is one empty paragraph rather than no document.
   if (current.length > 0 || paragraphs.length === 0) flush();
 
-  // A block walk emits a paragraph as it closes, so a host whose last child is
-  // a `<p>` leaves one empty paragraph behind. Real trailing blank lines are
-  // preserved; only that artefact is dropped.
-  if (
-    paragraphs.length > 1 &&
-    paragraphs[paragraphs.length - 1]!.runs.length === 0 &&
-    host.lastElementChild &&
-    BLOCK.has(host.lastElementChild.tagName)
-  ) {
-    paragraphs.pop();
-  }
-
+  // There used to be a guard here that dropped a trailing empty paragraph, on
+  // the grounds that the walk left one behind. It did — but only because the
+  // filler `<br>` was being counted as a line, which the branch above now
+  // handles. With that fixed, every block child emits exactly one paragraph
+  // and there is no artefact to drop, so the guard could only ever fire on a
+  // blank line somebody had actually typed. It ate the one at the end of every
+  // document that had one.
   return { paragraphs };
 }
 
