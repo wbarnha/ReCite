@@ -28,12 +28,14 @@
  * ```
  */
 
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { type Server } from "node:http";
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { BASE_PATH, serveSite, siteIsBuilt } from "./helpers/site-server.js";
+import { BASE_PATH, DIST, serveSite, siteIsBuilt } from "./helpers/site-server.js";
+import { join } from "node:path";
+
 import { reachable, waitForElement, WebDriverSession } from "./helpers/webdriver.js";
 
 /**
@@ -51,6 +53,20 @@ const endpoint = process.env["RECITE_WEBDRIVER"];
  * of value if it quietly ran nothing.
  */
 const REQUIRED = process.env["RECITE_REQUIRE_SAFARI"] === "1";
+
+/**
+ * The lazily-imported chunk that holds `pdfjs-dist` and `tesseract.js`.
+ *
+ * Found by name rather than pinned, since the hash changes every build.
+ */
+const engineChunk = (() => {
+  const assets = join(DIST, "assets");
+  if (!existsSync(assets)) return "";
+  const found = readdirSync(assets).find(
+    (name) => name.startsWith("pdf-permissive-") && name.endsWith(".js"),
+  );
+  return found ? `assets/${found}` : "";
+})();
 
 const possible =
   siteIsBuilt() &&
@@ -269,6 +285,32 @@ describe.skipIf(!possible)("the published site in the Safari Apple ships", () =>
     );
     expect(await faults()).toEqual([]);
   }, 120_000);
+
+  it("loads the PDF engine chunk at all", async () => {
+    // Narrowing, not coverage.
+    //
+    // Both PDF cases fail in about two seconds — the same for a text-layer PDF
+    // as for an eleven-page scan — which is far too fast to be PDF *work*. The
+    // PDF path is also the only one that takes a dynamic `import()`, and a
+    // `.txt` (which takes none) opens fine. That points at the chunk failing
+    // when it is evaluated rather than at anything it later does.
+    //
+    // So import the chunk directly and report what comes back. The app catches
+    // import failures and shows only `.message`, which is how this hunt lost
+    // the stack; here nothing catches it, so the frame survives.
+    await open();
+
+    const outcome = await session.execute<string>(
+      `return import(${JSON.stringify(`${BASE_PATH}${engineChunk}`)})
+         .then(function () { return 'ok'; },
+               function (e) { return 'THREW: ' + (e && (e.stack || e.message) || String(e)); });`,
+    );
+
+    expect(
+      outcome,
+      `the lazily-imported PDF chunk (${engineChunk}) failed to evaluate`,
+    ).toBe("ok");
+  }, 180_000);
 
   it("opens a PDF", async () => {
     // The path an iPhone crashed on, in the engine family that crashed. This
