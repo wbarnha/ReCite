@@ -173,6 +173,74 @@ change it. Downscaling page images before recognition would mean bypassing
 Scribe's PDF handling entirely, which would also lose the text-layer path, so
 it is not implemented rather than implemented badly.
 
+## Which browsers, and what a green tick means
+
+ReCite runs entirely in the browser, so "does it work" is a question about
+engines rather than about this repository. For a long time the answer came from
+Chromium alone — and Chromium was green while an iPhone user was getting
+`undefined is not a function` opening a PDF. That message is JavaScriptCore's
+way of saying something was iterated that has no iterator. A Chromium-only
+suite cannot see it, because Chromium is not the engine that broke.
+
+`tools/test/platforms.test.ts` is the answer to that, and `.github/workflows/platforms.yml`
+runs it once per platform. Every job drives a **real engine**:
+
+| Platform           | Engine                     | Ships in       |
+| ------------------ | -------------------------- | -------------- |
+| `desktop-chromium` | Blink, V8                  | Chrome, Edge   |
+| `desktop-firefox`  | Gecko, SpiderMonkey        | Firefox        |
+| `desktop-webkit`   | WebKit, JavaScriptCore     | Safari         |
+| `android-chrome`   | Blink, V8, Pixel 7 metrics | Android Chrome |
+| `ios-safari`       | WebKit, JSC, iPhone 15     | Mobile Safari  |
+
+The mobile rows are **not the same kind of claim**, and the difference matters:
+
+- **Android Chrome is Blink.** Driving Blink with a phone's viewport, touch and
+  user agent differs from a real handset mostly in platform integration, so this
+  row is close to the real thing.
+- **`ios-safari` is not an iPhone.** Playwright's WebKit is built from WebKit
+  and runs JavaScriptCore, so it catches the class of bug above. It is not the
+  Safari Apple ships, it lags it, and it cannot see anything that depends on iOS
+  itself — the share sheet, the file picker, memory limits on a real device, or
+  a version of Safari older than the WebKit that Playwright bundles.
+
+Nobody should read a green tick as "tested on an iPhone". It is "tested on the
+engine an iPhone runs, at an iPhone's size". That is a large improvement on
+"tested on Chromium" and is still not a device.
+
+### One build, every engine
+
+The workflow builds once and every platform job downloads the same artefact, so
+a failure is a difference between engines rather than between builds — which is
+the only thing the matrix is trying to measure.
+
+### A missing engine is never a pass
+
+The trap in a matrix like this is that an engine which fails to install reports
+a green tick for a platform nothing ran on. So:
+
+- **Locally**, a missing engine **skips**, visibly. A contributor with only
+  Chromium gets `14 passed | 21 skipped` rather than a fake all-clear.
+- **In CI**, `RECITE_REQUIRE_PLATFORMS=1` turns a missing engine into a
+  **failure**, because a job whose whole purpose is to run WebKit has done
+  nothing of value if WebKit is absent.
+
+Run one platform locally with `RECITE_PLATFORMS=ios-safari pnpm test:platforms`,
+after `pnpm exec playwright install webkit`.
+
+### What goes in this suite
+
+It is the wide suite, not the deep one. `browser.test.ts` still owns OCR, the
+network promise, the editor's geometry and the save formats, on one engine,
+because running OCR five times costs twenty minutes to learn one thing. A test
+belongs here only if it is cheap and it is about something an engine can differ
+on: loading without a script error, running the rule set, reading a file,
+opening a PDF, saving, and not overflowing a phone's viewport.
+
+The PDF case earns its place specifically. It is the only path that takes a
+dynamic `import()`, and the chunk it pulls in — `pdfjs-dist` and `tesseract.js` —
+is the most modern JavaScript the app ships.
+
 ## The graded corpus
 
 The Mata filing is a corpus of real citations, and it answers "does the parser

@@ -1,0 +1,173 @@
+name: Platforms
+
+# What this workflow is for, and what it is not.
+#
+# ReCite runs entirely in the browser, so "does it work" is a question about
+# engines rather than about this repository. The suite that existed before this
+# one drove Chromium, and Chromium was green while an iPhone user was getting
+# `undefined is not a function` opening a PDF — JavaScriptCore's message for
+# iterating something with no iterator. A Chromium-only suite cannot see that,
+# because Chromium is not the engine that broke.
+#
+# So every job here runs a *real engine*:
+#
+#   Blink + V8                → the engine Chrome and Edge ship
+#   Gecko + SpiderMonkey      → the engine Firefox ships
+#   WebKit + JavaScriptCore   → the engine Safari ships
+#
+# The two mobile jobs pair an engine with a phone's viewport, touch and user
+# agent from a Playwright device descriptor. Read them precisely:
+#
+#   android-chrome  Android Chrome IS Blink, so this differs from a handset
+#                   mostly in platform integration.
+#   ios-safari      Playwright's WebKit is built from WebKit and runs JSC, so
+#                   it catches the class of bug above — but it is NOT the
+#                   Safari Apple ships, it lags it, and it cannot see anything
+#                   that depends on iOS itself.
+#
+# Neither is a device farm and neither should be reported as "tested on an
+# iPhone". docs/testing.md sets out what a green tick here does and does not
+# entitle anyone to claim.
+
+on:
+  push:
+    branches: ["main", "master"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Built once, tested everywhere. Every platform job downloads the same bytes,
+  # so a failure is a difference between engines rather than between builds —
+  # which is the only thing this workflow is trying to measure.
+  build:
+    name: build the site once
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build:release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: site
+          path: apps/web/dist
+          retention-days: 1
+
+  platforms:
+    name: ${{ matrix.label }}
+    needs: build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # Every platform reports for itself. One engine failing must not hide
+      # whether the others were fine — that is the whole diagnostic value.
+      fail-fast: false
+      matrix:
+        include:
+          - label: Desktop · Chrome and Edge (Blink) · Linux
+            os: ubuntu-latest
+            platform: desktop-chromium
+            engine: chromium
+          - label: Desktop · Firefox (Gecko) · Linux
+            os: ubuntu-latest
+            platform: desktop-firefox
+            engine: firefox
+          - label: Desktop · Safari (WebKit) · Linux
+            os: ubuntu-latest
+            platform: desktop-webkit
+            engine: webkit
+          - label: Android · Chrome (Blink)
+            os: ubuntu-latest
+            platform: android-chrome
+            engine: chromium
+          - label: iOS · Safari (WebKit)
+            os: ubuntu-latest
+            platform: ios-safari
+            engine: webkit
+          # The two jobs below are about the operating system rather than the
+          # engine: file pickers, downloads, fonts and path handling are where
+          # a browser-based app meets the OS, and they are the things Linux
+          # cannot answer for. Windows minutes bill at 2x and macOS at 10x, so
+          # this is deliberately two jobs and not another full matrix.
+          - label: Desktop · Safari (WebKit) · macOS
+            os: macos-latest
+            platform: desktop-webkit
+            engine: webkit
+          - label: Desktop · Chrome and Edge (Blink) · Windows
+            os: windows-latest
+            platform: desktop-chromium
+            engine: chromium
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: site
+          path: apps/web/dist
+
+      # Keyed on the Playwright version, because a browser build belongs to the
+      # Playwright that expects it: cache a browser across an upgrade and the
+      # resolved path names a revision that is not there.
+      - name: Playwright version
+        id: pw
+        shell: bash
+        run: echo "version=$(node -p "require('playwright/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache@v4
+        id: browser-cache
+        with:
+          path: ${{ github.workspace }}/.playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}-${{ matrix.engine }}
+
+      # `--with-deps` installs system libraries and is Linux-only; on macOS and
+      # Windows the browser build is self-contained.
+      - name: Install ${{ matrix.engine }}
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            pnpm exec playwright install --with-deps ${{ matrix.engine }}
+          else
+            pnpm exec playwright install ${{ matrix.engine }}
+          fi
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright
+
+      - name: ${{ matrix.label }}
+        run: pnpm test:platforms
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright
+          RECITE_PLATFORMS: ${{ matrix.platform }}
+          # A job that exists to run one engine must go red if that engine did
+          # not install, rather than reporting a green tick for a platform
+          # nothing was tested on.
+          RECITE_REQUIRE_PLATFORMS: "1"
+
+  # A single check to require in branch protection, so adding a platform above
+  # does not mean editing repository settings.
+  platforms-passed:
+    name: every platform passed
+    if: always()
+    needs: platforms
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail unless every platform job succeeded
+        run: |
+          echo "platforms result: ${{ needs.platforms.result }}"
+          [ "${{ needs.platforms.result }}" = "success" ]

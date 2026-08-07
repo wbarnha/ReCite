@@ -24,7 +24,8 @@ import type { Browser, Page } from "playwright";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { makeScannedPdf } from "./helpers/scanned-pdf.js";
-import { BASE_PATH, CHROMIUM, serveSite, siteIsBuilt } from "./helpers/site-server.js";
+import { executableFor } from "./helpers/platforms.js";
+import { BASE_PATH, serveSite, siteIsBuilt } from "./helpers/site-server.js";
 
 const built = siteIsBuilt();
 /** Imported dynamically so the suite still loads where Playwright is absent. */
@@ -35,7 +36,9 @@ try {
   playwright = undefined;
 }
 
-const runnable = built && playwright !== undefined;
+/** Where Chromium actually is, or `undefined` if it was never installed. */
+const chromium = playwright ? executableFor(playwright, "chromium") : undefined;
+const runnable = built && playwright !== undefined && chromium !== undefined;
 
 describe.skipIf(!runnable)("the published site in a browser", () => {
   let server: Server;
@@ -48,7 +51,7 @@ describe.skipIf(!runnable)("the published site in a browser", () => {
   beforeAll(async () => {
     ({ server, origin } = await serveSite());
     browser = await playwright!.chromium.launch({
-      executablePath: CHROMIUM,
+      executablePath: chromium,
       args: ["--no-sandbox"],
     });
   }, 120_000);

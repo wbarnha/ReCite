@@ -19,9 +19,6 @@ export const DIST = join(ROOT, "apps", "web", "dist");
 /** The site is served from a sub-path on Pages, so this does too. */
 export const BASE_PATH = "/ReCite/";
 
-/** Pre-installed by the environment; Playwright is told not to download one. */
-export const CHROMIUM = "/opt/pw-browsers/chromium-1194/chrome-linux/chrome";
-
 const MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
@@ -38,9 +35,15 @@ const MIME: Record<string, string> = {
   ".map": "application/json",
 };
 
-/** Whether there is a build and a browser to run it in. */
+/**
+ * Whether there is a build to serve.
+ *
+ * Only the build. Whether there is a browser to run it in is a separate
+ * question with a separate answer per engine, and conflating the two meant a
+ * missing Chromium reported itself as "the site is not built".
+ */
 export function siteIsBuilt(): boolean {
-  return existsSync(join(DIST, "index.html")) && existsSync(CHROMIUM);
+  return existsSync(join(DIST, "index.html"));
 }
 
 export function serveSite(): Promise<{ server: Server; origin: string }> {
