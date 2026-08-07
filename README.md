@@ -304,6 +304,30 @@ A jump can miss — offsets come from the last check, and the document may have
 been edited since, in Word possibly by somebody else in another window. When it
 does, ReCite says so rather than leaving a button that appears not to work.
 
+## When it gets one wrong
+
+Every finding has a **Report** link, and there is one under the list for the
+other kind of mistake — a citation that is wrong and which ReCite said nothing
+about.
+
+That is not politeness. A linter's worst failure is not being wrong once; it is
+being wrong in a way nobody tells you about. Someone who watches a rule fire on
+a citation they know is correct will rationally stop reading that rule, and
+every real finding it makes afterwards is wasted.
+
+The link composes the report, because one without the settings cannot be acted
+on: the same citation is a finding under the Whitepages and correct under the
+21st edition Bluepages, `VF001` means different things against different
+authority sources, and a document read by OCR may not say what ReCite checked.
+So the report carries all of that, and the exact build.
+
+**Nothing is sent by composing one** — there is no server to send it to. The
+dialog builds the text in the page and you choose: copy it, save it as a file,
+or open a prefilled issue. Because the tracker is public, it carries the
+citation and nothing else; the surrounding sentence is a bounded, opt-in
+tick-box, the citation is editable before you send it, and the preview is the
+actual text rather than a summary of it.
+
 ## Fixing
 
 `Fix` applies only **safe** corrections by default — the ones that change how a
@@ -419,7 +443,7 @@ change to a single rule.
 ```console
 $ pnpm install
 $ pnpm dev            # web app on :3000
-$ pnpm test           # 1105 tests
+$ pnpm test           # 1135 tests
 $ pnpm check          # lint + format + types + tests, what CI runs
 $ pnpm build:release  # build, generate manifest.xml, write checksums
 ```

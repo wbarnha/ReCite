@@ -26,6 +26,8 @@ import { Engine, fixableCorrections } from "@recite/engine";
 import { useCallback, useMemo, useRef, useState } from "react";
 
 import type { AuthoritySource } from "./authority.js";
+import type { ReportSubject } from "./feedback/report.js";
+import { contextAround, subjectFor } from "./feedback/report.js";
 import { makeCourtListenerClient, makeCourtListenerProvider } from "./authority.js";
 import type { DocumentComment } from "./export/index.js";
 import type { DocumentHost } from "./host.js";
@@ -233,6 +235,48 @@ export function useReCite({ host, corpus }: UseReCiteOptions) {
     [host],
   );
 
+  /**
+   * The finding or citation a report is being written about, or `null`.
+   *
+   * Held here rather than in a component because both surfaces raise it from
+   * two places — a finding, and a citation nothing was said about — and the
+   * dialog should not care which.
+   */
+  const [reporting, setReporting] = useState<ReportSubject | null>(null);
+
+  const reportFinding = useCallback((diagnostic: Diagnostic) => {
+    setReporting(subjectFor(diagnostic, textRef.current, true));
+  }, []);
+
+  /**
+   * Report a citation ReCite said nothing about.
+   *
+   * The most valuable report there is, and the one nothing else in the app can
+   * prompt for: a false positive is attached to a finding you can click, and a
+   * miss is attached to nothing at all. Prefilled from the selection when the
+   * host can supply one, so the common case is select-and-report.
+   */
+  const reportCitation = useCallback(() => {
+    void (async () => {
+      const selected = (await host.selection?.()) ?? "";
+      const citation = selected.trim().slice(0, 200);
+      const at = citation ? textRef.current.indexOf(citation) : -1;
+
+      setReporting({
+        kind: "missed",
+        citation,
+        ...(at >= 0
+          ? {
+              context: contextAround(textRef.current, {
+                start: at,
+                end: at + citation.length,
+              }),
+            }
+          : {}),
+      });
+    })();
+  }, [host]);
+
   const fixableCount = result
     ? fixableCorrections(result.diagnostics, allowUnsafe).length
     : 0;
@@ -266,6 +310,10 @@ export function useReCite({ host, corpus }: UseReCiteOptions) {
     fixAll,
     applyOne,
     reveal,
+    reporting,
+    reportFinding,
+    reportCitation,
+    closeReport: useCallback(() => setReporting(null), []),
     fixableCount,
     hasCorpus: Boolean(corpus?.length),
   };

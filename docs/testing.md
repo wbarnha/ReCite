@@ -1,7 +1,7 @@
 # Testing, and where the fixtures come from
 
 ```console
-$ pnpm test          # 1105 tests
+$ pnpm test          # 1135 tests
 $ pnpm coverage
 $ pnpm check         # lint + format + types + tests, exactly what CI runs
 $ pnpm test:browser  # the built site in real Chromium (needs `pnpm build:release` first)
