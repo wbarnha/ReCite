@@ -112,9 +112,22 @@ export function warmModel(): Promise<void> {
  */
 export function dragCarriesPdf(transfer: DataTransfer | null): boolean {
   if (!transfer) return false;
-  return [...transfer.items].some(
-    (item) => item.kind === "file" && item.type === "application/pdf",
-  );
+
+  // Walked by index rather than spread or `for…of`.
+  //
+  // `DataTransferItemList` is an indexed collection, and the HTML standard does
+  // not declare it iterable: there is no `Symbol.iterator` on it to find.
+  // Engines that expose one do so of their own accord, so `[...transfer.items]`
+  // is a coin toss that lands as `undefined is not a function` — thrown inside
+  // a `dragover` handler, where the only visible symptom is that dropping a
+  // file stops working. `length` and an index are all this needs, and they are
+  // the two things the standard does guarantee.
+  const items = transfer.items;
+  for (let index = 0; index < items.length; index++) {
+    const item = items[index];
+    if (item?.kind === "file" && item.type === "application/pdf") return true;
+  }
+  return false;
 }
 
 /** Warm whatever the evidence justifies. Call from `dragover`. */
