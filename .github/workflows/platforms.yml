@@ -166,15 +166,85 @@ jobs:
           # nothing was tested on.
           RECITE_REQUIRE_PLATFORMS: "1"
 
+  # The one job that drives the browser Apple actually ships.
+  #
+  # Every other job here runs Playwright, and Playwright cannot drive branded
+  # Safari — it relies on patches, so it bundles WebKit from upstream `main`.
+  # That build runs ahead of the Safari on anyone's phone and is therefore blind
+  # to the bugs people actually report.
+  #
+  # `/usr/bin/safaridriver` is a W3C WebDriver server built into macOS, and the
+  # runner image already runs `sudo safaridriver --enable` and sets
+  # AllowRemoteAutomation at build time — so this needs one background process
+  # and no dependency. Desktop Safari 26.x and Mobile Safari on iOS 26.x are the
+  # same WebKit release train and the same JavaScriptCore, so a pure JavaScript
+  # engine bug on an iPhone reproduces here.
+  #
+  # It is still macOS. It cannot see the iOS file picker, touch-only
+  # interaction, or the memory ceiling that kills the content process on a real
+  # handset — and it only ever tests the Safari on the runner, so an older
+  # iPhone stays out of reach.
+  safari:
+    name: Safari on macOS (the browser Apple ships)
+    needs: build
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: site
+          path: apps/web/dist
+
+      - name: Which Safari is this
+        run: |
+          defaults read /Applications/Safari.app/Contents/Info.plist CFBundleShortVersionString
+          /usr/bin/safaridriver --version
+
+      - name: Start safaridriver
+        run: |
+          /usr/bin/safaridriver --port 4444 --diagnose &
+          for _ in $(seq 30); do
+            if nc -z 127.0.0.1 4444; then echo "safaridriver is up"; exit 0; fi
+            sleep 1
+          done
+          echo "::error::safaridriver never started listening on 4444"
+          exit 1
+
+      - name: The site in real Safari
+        run: pnpm test:safari
+        env:
+          RECITE_WEBDRIVER: http://127.0.0.1:4444
+          # A job that exists to drive the shipping browser must go red if it
+          # could not, rather than skipping and reporting a green tick.
+          RECITE_REQUIRE_SAFARI: "1"
+
+      # safaridriver's own log is the only account of why a session refused to
+      # start, and that is the failure this job is most likely to hit.
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: safaridriver-logs
+          path: ~/Library/Logs/com.apple.WebDriver
+          if-no-files-found: ignore
+
   # A single check to require in branch protection, so adding a platform above
   # does not mean editing repository settings.
   platforms-passed:
     name: every platform passed
     if: always()
-    needs: platforms
+    needs: [platforms, safari]
     runs-on: ubuntu-24.04
     steps:
       - name: Fail unless every platform job succeeded
         run: |
           echo "platforms result: ${{ needs.platforms.result }}"
-          [ "${{ needs.platforms.result }}" = "success" ]
+          echo "safari result:    ${{ needs.safari.result }}"
+          [ "${{ needs.platforms.result }}" = "success" ] \
+            && [ "${{ needs.safari.result }}" = "success" ]

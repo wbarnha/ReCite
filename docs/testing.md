@@ -235,6 +235,60 @@ a green tick for a platform nothing ran on. So:
 Run one platform locally with `RECITE_PLATFORMS=webkit-phone pnpm test:platforms`,
 after `pnpm exec playwright install webkit`.
 
+### The browser Apple actually ships
+
+Everything above drives Playwright, and Playwright cannot drive branded Safari —
+it relies on patches, so it bundles WebKit from upstream `main`. `tools/test/safari.test.ts`
+closes that gap by talking to `/usr/bin/safaridriver`, the W3C WebDriver server
+built into macOS, over plain HTTP with `fetch`. No Selenium, no WebdriverIO, no
+new dependency: `tools/test/helpers/webdriver.ts` is about a hundred lines.
+
+GitHub's macOS images already run `sudo safaridriver --enable` at build time, so
+the CI job is one background process.
+
+**What it proves.** Desktop Safari 26.x and Mobile Safari on iOS 26.x are the
+same WebKit release train and the same JavaScriptCore, so a _pure JavaScript_
+engine bug on an iPhone reproduces here. That is a materially stronger claim
+than anything the `webkit-phone` row can make, because it is the shipping
+version rather than trunk.
+
+**What it does not.** It is macOS. It cannot see the iOS file picker,
+touch-only interaction, or the memory ceiling that kills the content process on
+a real handset. It only ever tests the Safari on the runner, so an older iPhone
+stays out of reach. Only a device cloud goes further.
+
+Two constraints shape how it is written, and both are easy to get wrong:
+
+- **WebDriver has no page-error event.** Unlike Playwright there is no
+  `pageerror`, so an uncaught exception is invisible and shows up only as a
+  later assertion timing out. `serveSite({ collectErrors: true })` serves a
+  small script that records `error` and `unhandledrejection` into
+  `window.__reciteErrors`, and the suite reads it back after each step.
+- **That collector cannot be inline.** The app ships
+  `script-src 'self' 'wasm-unsafe-eval'` with no `'unsafe-inline'`, so an
+  inline collector would be refused by the very policy the app is proud of —
+  and the suite would report a clean page while the browser blocked its
+  instrument. It is served as a same-origin file, and only when asked for, so
+  the suites that assert on subresource integrity still see the published
+  article untouched.
+
+Locally:
+
+```console
+$ safaridriver --port 4444 &
+$ RECITE_WEBDRIVER=http://127.0.0.1:4444 pnpm test:safari
+```
+
+It skips without that variable, because enabling remote automation changes
+someone's browser and is not something a test run should assume. In CI
+`RECITE_REQUIRE_SAFARI=1` turns "could not reach Safari" into a failure.
+
+`tools/test/webdriver.test.ts` covers the client against a stubbed transport —
+the URL shapes, the `alwaysMatch` capabilities, unwrapping the element key,
+treating `no such element` as an absence rather than a fault, and keeping the
+remote's own wording when a command fails. That last one matters: the message
+this whole exercise is chasing is one Safari produces and nothing else does.
+
 ### What goes in this suite
 
 It is the wide suite, not the deep one. `browser.test.ts` still owns OCR, the

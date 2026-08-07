@@ -46,7 +46,61 @@ export function siteIsBuilt(): boolean {
   return existsSync(join(DIST, "index.html"));
 }
 
-export function serveSite(): Promise<{ server: Server; origin: string }> {
+/**
+ * Where the error collector is served from, when it is asked for.
+ *
+ * A separate file rather than an inline script, because the app ships
+ * `script-src 'self' 'wasm-unsafe-eval'` with no `'unsafe-inline'` — an inline
+ * collector would be refused by the very policy the app is proud of, and the
+ * suite would report a clean page while the browser blocked its instrument.
+ */
+export const COLLECTOR_PATH = "__recite-errors.js";
+
+/**
+ * Catch what a page throws, for drivers that cannot tell you.
+ *
+ * Playwright has `pageerror`. W3C WebDriver has nothing of the kind, so an
+ * uncaught exception in the app is invisible to it — the symptom is a later
+ * assertion timing out, with no clue why. Recording errors as they happen and
+ * reading them back afterwards is the only way to make a real Safari say what
+ * went wrong.
+ *
+ * Loaded first so it is installed before any application module evaluates,
+ * which is where the interesting failures are.
+ */
+const COLLECTOR = `(function () {
+  var recorded = [];
+  window.__reciteErrors = recorded;
+  window.addEventListener("error", function (event) {
+    recorded.push(
+      String(event.message || (event.error && event.error.message) || event.type) +
+        (event.filename ? " (" + event.filename + ":" + event.lineno + ")" : "")
+    );
+  });
+  window.addEventListener("unhandledrejection", function (event) {
+    var reason = event.reason;
+    recorded.push(
+      "unhandled rejection: " +
+        String((reason && (reason.message || reason)) || "unknown")
+    );
+  });
+})();
+`;
+
+export interface ServeOptions {
+  /**
+   * Serve {@link COLLECTOR_PATH} and reference it from `index.html`.
+   *
+   * Off by default: it changes the bytes of the served page, and the suites
+   * that assert on subresource integrity or on what the page requests must see
+   * the published article untouched.
+   */
+  readonly collectErrors?: boolean;
+}
+
+export function serveSite(
+  options: ServeOptions = {},
+): Promise<{ server: Server; origin: string }> {
   const server = createServer((request, response) => {
     const url = new URL(request.url ?? "/", "http://localhost");
     let path = decodeURIComponent(url.pathname);
@@ -57,12 +111,29 @@ export function serveSite(): Promise<{ server: Server; origin: string }> {
     }
     path = path.slice(BASE_PATH.length) || "index.html";
 
+    if (options.collectErrors && path === COLLECTOR_PATH) {
+      response.writeHead(200, { "Content-Type": MIME[".js"]! });
+      response.end(COLLECTOR);
+      return;
+    }
+
     // The served tree is a fixture, but treating a request path as safe is a
     // habit worth not having.
     const target = join(DIST, normalize(path).replace(/^(?:\.\.[/\\])+/, ""));
     if (!target.startsWith(DIST) || !existsSync(target)) {
       response.writeHead(404).end("not found");
       return;
+    }
+
+    let body = readFileSync(target);
+    if (options.collectErrors && path === "index.html") {
+      // First thing in `<head>`, so it is listening before the app runs.
+      body = Buffer.from(
+        body
+          .toString("utf8")
+          .replace("<head>", `<head>\n    <script src="${COLLECTOR_PATH}"></script>`),
+        "utf8",
+      );
     }
 
     response.writeHead(200, {
@@ -72,7 +143,7 @@ export function serveSite(): Promise<{ server: Server; origin: string }> {
       "Cross-Origin-Embedder-Policy": "require-corp",
       "Cross-Origin-Resource-Policy": "same-origin",
     });
-    response.end(readFileSync(target));
+    response.end(body);
   });
 
   return new Promise((resolve) => {
