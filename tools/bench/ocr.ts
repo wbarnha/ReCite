@@ -38,14 +38,10 @@ import type { Server } from "node:http";
 
 import type { Browser } from "playwright";
 
+import { executableFor } from "../test/helpers/platforms.js";
 import { citationAccuracy, similarity } from "./accuracy.js";
 import { makeScannedPdf } from "../test/helpers/scanned-pdf.js";
-import {
-  BASE_PATH,
-  CHROMIUM,
-  serveSite,
-  siteIsBuilt,
-} from "../test/helpers/site-server.js";
+import { BASE_PATH, serveSite, siteIsBuilt } from "../test/helpers/site-server.js";
 
 /** The document each run is scored against. */
 const SCANNED_LINES = [
@@ -83,20 +79,23 @@ interface Run {
 
 async function main(): Promise<void> {
   if (!siteIsBuilt()) {
-    console.error(
-      "No build to measure. Run `pnpm build:release` first (and note this " +
-        "needs the pre-installed Chromium at " +
-        CHROMIUM +
-        ").",
-    );
+    console.error("No build to measure. Run `pnpm build:release` first.");
     process.exitCode = 1;
     return;
   }
 
   const playwright = await import("playwright");
+  const chromium = executableFor(playwright, "chromium");
+  if (!chromium) {
+    console.error(
+      "No Chromium to measure with. Run `pnpm exec playwright install chromium`.",
+    );
+    process.exitCode = 1;
+    return;
+  }
   const { server, origin } = await serveSite();
   const browser = await playwright.chromium.launch({
-    executablePath: CHROMIUM,
+    executablePath: chromium,
     args: ["--no-sandbox"],
   });
 
