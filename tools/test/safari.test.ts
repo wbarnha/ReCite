@@ -286,6 +286,31 @@ describe.skipIf(!possible)("the published site in the Safari Apple ships", () =>
     expect(await faults()).toEqual([]);
   }, 120_000);
 
+  it("reports whether this browser can iterate a ReadableStream", async () => {
+    // Evidence, and the diagnosis in one line.
+    //
+    // `pdfjs-dist` reads a page's text layer with
+    // `for await (const chunk of this.streamTextContent(...))`. Async iteration
+    // of a `ReadableStream` is part of the Streams standard and Safari has not
+    // shipped it, so asking for the iterator gets `undefined` and calling it
+    // throws `undefined is not a function (near '...e of t...')` — which is
+    // exactly, character for character, what an iPhone reported.
+    //
+    // Not an assertion about the browser: `stream-async-iterator.ts` installs
+    // the missing iterator, so by the time a PDF is opened it is there either
+    // way. This records which of the two happened, so a future reader can see
+    // whether Safari has caught up and the polyfill can go.
+    await open();
+    const native = await session.execute<string>(
+      `return JSON.stringify({
+         native: typeof ReadableStream.prototype[Symbol.asyncIterator],
+         afterPolyfill: null
+       })`,
+    );
+    console.log(`  ReadableStream async iteration, natively: ${native}`);
+    expect(native).toContain("native");
+  }, 120_000);
+
   it("loads the PDF engine chunk at all", async () => {
     // Narrowing, not coverage.
     //
