@@ -95,9 +95,63 @@ describe.skipIf(!possible)("the published site in the Safari Apple ships", () =>
     );
   }
 
-  /** Everything the page threw since it loaded. */
-  async function errors(): Promise<string[]> {
-    return session.execute<string[]>("return window.__reciteErrors || []");
+  /**
+   * Everything that went wrong, from all three places it can show up.
+   *
+   * The first version of this read only `window.__reciteErrors`, and reported
+   * "none recorded" for two solid failures. Two reasons, both worth stating:
+   *
+   * - `window.__reciteErrors || []` cannot tell "nothing was thrown" from
+   *   "the collector never loaded". It now reports the collector's absence as
+   *   a fault of its own, because a silent instrument is worse than none.
+   * - **ReCite catches import failures.** `FileDrop` puts the message in
+   *   `.filedrop-error` rather than letting it reach `window.onerror`, so the
+   *   thing being hunted was on screen the whole time and the suite was
+   *   looking past it.
+   */
+  async function faults(): Promise<string[]> {
+    const state = JSON.parse(
+      await session.execute<string>(`return JSON.stringify({
+        collector: typeof window.__reciteErrors !== 'undefined',
+        thrown: window.__reciteErrors || [],
+        importError: (document.querySelector('.filedrop-error') || {}).textContent || '',
+        progress: (document.querySelector('.filedrop-progress') || {}).textContent || '',
+        status: (document.querySelector('.status') || {}).textContent || ''
+      })`),
+    ) as {
+      collector: boolean;
+      thrown: string[];
+      importError: string;
+      progress: string;
+      status: string;
+    };
+
+    const found: string[] = [];
+    if (!state.collector) {
+      found.push(
+        "the error collector never loaded — this suite is blind, fix that first",
+      );
+    }
+    found.push(...state.thrown);
+    if (state.importError.trim())
+      found.push(`the app reported: ${state.importError.trim()}`);
+    return found;
+  }
+
+  /** What the page is showing, for a failure message that can be acted on. */
+  async function narrate(): Promise<string> {
+    const state = JSON.parse(
+      await session.execute<string>(`return JSON.stringify({
+        progress: (document.querySelector('.filedrop-progress') || {}).textContent || '',
+        status: (document.querySelector('.status') || {}).textContent || '',
+        importError: (document.querySelector('.filedrop-error') || {}).textContent || ''
+      })`),
+    ) as { progress: string; status: string; importError: string };
+    return (
+      `progress=${JSON.stringify(state.progress.trim())} ` +
+      `status=${JSON.stringify(state.status.trim())} ` +
+      `error=${JSON.stringify(state.importError.trim())}`
+    );
   }
 
   /**
@@ -154,26 +208,27 @@ describe.skipIf(!possible)("the published site in the Safari Apple ships", () =>
     let last = "";
 
     while (Date.now() < deadline) {
-      const thrown = await errors().catch(() => []);
-      if (thrown.length > 0) {
-        throw new Error(`${what}: the page threw — ${thrown.join("; ")}`);
+      const wrong = await faults().catch(() => []);
+      if (wrong.length > 0) {
+        throw new Error(`${what}: ${wrong.join("; ")}`);
       }
       last = await session.execute<string>(script);
       if (matches(last)) return last;
       await new Promise((resolve) => setTimeout(resolve, 250));
     }
 
-    const thrown = await errors().catch(() => []);
+    const wrong = await faults().catch(() => []);
     throw new Error(
       `${what} did not happen within ${timeoutMs}ms. ` +
         `Last value: ${JSON.stringify(last).slice(0, 200)}. ` +
-        `Page errors: ${thrown.length > 0 ? thrown.join("; ") : "none recorded"}`,
+        `Faults: ${wrong.length > 0 ? wrong.join("; ") : "none recorded"}. ` +
+        `Page was showing ${await narrate().catch(() => "nothing readable")}`,
     );
   }
 
   it("loads and runs without a script error", async () => {
     await open();
-    expect(await errors()).toEqual([]);
+    expect(await faults()).toEqual([]);
   }, 120_000);
 
   it("checks a citation", async () => {
@@ -199,7 +254,7 @@ describe.skipIf(!possible)("the published site in the Safari Apple ships", () =>
       60_000,
       "the check to report",
     );
-    expect(await errors()).toEqual([]);
+    expect(await faults()).toEqual([]);
   }, 120_000);
 
   it("opens a file into the editor", async () => {
@@ -212,7 +267,7 @@ describe.skipIf(!possible)("the published site in the Safari Apple ships", () =>
       60_000,
       "the document to open",
     );
-    expect(await errors()).toEqual([]);
+    expect(await faults()).toEqual([]);
   }, 120_000);
 
   it("opens a PDF", async () => {
@@ -228,7 +283,9 @@ describe.skipIf(!possible)("the published site in the Safari Apple ships", () =>
       120_000,
       "the PDF to be read",
     );
-    expect(await errors(), "the PDF path threw in the browser Apple ships").toEqual([]);
+    expect(await faults(), "the PDF path failed in the browser Apple ships").toEqual(
+      [],
+    );
   }, 300_000);
 
   it("opens the example filing, scanned pages and all", async () => {
@@ -266,7 +323,7 @@ describe.skipIf(!possible)("the published site in the Safari Apple ships", () =>
       "the example filing to be read",
     );
 
-    expect(await errors(), "the example filing threw in Safari").toEqual([]);
+    expect(await faults(), "the example filing failed in Safari").toEqual([]);
   }, 660_000);
 });
 
