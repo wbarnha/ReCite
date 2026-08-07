@@ -200,6 +200,14 @@ ReCite draws ever reaches the saved file; marks live in a document model rather
 than in `execCommand`, so a fix landing inside a bold citation gives back a
 bold citation. See [docs/editor.md](docs/editor.md).
 
+The page is sized to be read: the same **74-character line at every window
+width** from a small laptop to a 2560px display, in a window that takes the
+height the screen can spare. It did not used to be — on a 1920×1080 screen the
+line was 25 characters wide, narrower than the same document got on a phone,
+and the comment margin held a fifteen-rem column open for quotations that are
+not fetched until you ask for them. [docs/editor.md](docs/editor.md#how-big-the-page-is)
+has the four causes and the measurements.
+
 **ReCite still does not read the formatting of a document you open.** It works
 on the text of citations. What is new is that the formatting _you_ apply is
 kept, and is written out when you save — an editor that silently un-bolded a

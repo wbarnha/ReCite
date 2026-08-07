@@ -111,6 +111,66 @@ the start of the paragraph on every character typed.
 Everything above that seam is unchanged: `useReCite` still calls
 `read`/`apply`/`reveal` and still does not know which surface it has.
 
+## How big the page is
+
+A page is only a page if you can read a line of it. The first version of this
+editor could not be, on the machines most of its users have: on a 1920×1080
+screen the line of prose was **164 pixels wide — about 25 characters**, and an
+11,000-pixel document was shown through a 510-pixel window. The same document
+on a phone got a wider line, which is the tell that nothing was responding to
+the screen at all.
+
+Four things were adding up, and each is worth stating because each is a
+different mistake.
+
+| What                                                             | Why it was wrong                                                                                                            |
+| ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `.app` capped at 1100px                                          | a 2560px display used 43% of itself                                                                                         |
+| `.columns` split exactly in half                                 | one half is a page of prose, the other a list of short findings — they do not want the same width                           |
+| a 15rem comment margin, always                                   | it is **empty** until CourtListener has been asked for pincites, and it was taking 43% of the document's column to hold nothing |
+| `.editor-frame` capped at a fixed 34rem                          | a third of a desktop screen, whatever the screen                                                                            |
+
+The fix is four answers, and one of them matters more than the others.
+
+**The margin's width is a question about the column, not the window.** Whether
+the quotations fit beside the page depends on how wide the editor's own column
+is — and once the findings sit in a column of their own, that is not the width
+of the window. Keying it to the window produced a genuine cliff: at 960px the
+media query stacked the margin under the page and the line was 334px; **one
+pixel wider it un-stacked, took 15rem back out of a 452px column, and the line
+collapsed to 94px.** A `@container` query on `.editor` asks the only element
+that knows. Container queries are not a risk here — they shipped a full six
+Chrome versions before `color-mix()`, which this stylesheet already uses.
+
+The other three: the shell widens to 88rem, the findings column is capped at
+24rem so what is left over goes to the document, the frame's height comes from
+the screen (`clamp(34rem, 100vh - 24rem, 56rem)` — floored at what it always
+was, so a short laptop is no worse off), and an empty margin takes no room at
+all.
+
+Two properties fall out of that, and both are load-bearing:
+
+- **The line is the same width at every size.** 74 characters from 768px to
+  2560px, degrading smoothly to 43 on a phone, because the page is capped at a
+  measure rather than being a fraction of whatever room there is.
+- **Pulling pincites does not reflow the prose.** The page stops growing before
+  the frame does, so the margin appears beside a page that does not move —
+  which matters because the notes are positioned from offsets measured against
+  the layout as it was.
+
+Two smaller things were fixed on the way. In the stacked layout `.page` had
+nothing telling it to fill the frame, and `align-items: flex-start` is the
+horizontal axis once a flex row becomes a column — so a document of short
+paragraphs shrink-wrapped to **83px of text inside an 863px frame**. And the
+browser test that bolds a word passed only *because* the editor was too narrow:
+it double-clicks a paragraph, Playwright aims at the middle of the box, and on
+a page wide enough to hold the sentence in one line the middle falls past the
+end of it and selects nothing. It now aims at a word.
+
+`tools/test/browser.test.ts` measures the line in characters, at nine widths
+including both sides of the old 961px cliff, so none of this can quietly come
+back.
+
 ## Jumping to a citation
 
 The citation in a finding **is** the control: click it and the document scrolls

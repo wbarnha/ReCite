@@ -58,8 +58,8 @@ describe.skipIf(!runnable)("the published site in a browser", () => {
     server?.close();
   });
 
-  async function open(query = "") {
-    const page = await browser.newPage();
+  async function open(query = "", viewport?: { width: number; height: number }) {
+    const page = await browser.newPage(viewport ? { viewport } : {});
     requested = [];
     page.on("request", (request) => requested.push(request.url()));
     const errors: string[] = [];
@@ -276,7 +276,15 @@ describe.skipIf(!runnable)("the published site in a browser", () => {
     await openDocument(page, "The pleading standard is set out in Iqbal.");
 
     // Double-click selects a word, which is the selection the toolbar acts on.
-    await page.locator(".page p").first().dblclick();
+    // Aimed near the start of the line rather than left to Playwright's default
+    // click point, which is the middle of the paragraph's box: on a page wide
+    // enough to hold this sentence in one line the middle falls past the end of
+    // it, selecting nothing. This test used to pass only because the page was
+    // too narrow to fit the sentence.
+    await page
+      .locator(".page p")
+      .first()
+      .dblclick({ position: { x: 8, y: 8 } });
     await page.click("button[aria-label^='Bold']");
     expect(await page.locator(".page strong").count()).toBeGreaterThan(0);
 
@@ -309,6 +317,102 @@ describe.skipIf(!runnable)("the published site in a browser", () => {
     "See Doe v. Roe, 526 U.S. 795 (U.S. 1999), which is dispositive.",
     ...Array.from({ length: 60 }, (_, i) => `Paragraph ${i + 62} of the argument.`),
   ].join("\n\n");
+
+  /**
+   * How wide the line of prose actually is, and how tall the window on it is.
+   *
+   * The measure is what the reader reads: `.page`'s content box less the
+   * padding that makes it look like a sheet. Reported in characters as well as
+   * pixels, against the page's own serif, because "164px" does not say on its
+   * own that a line held about 25 characters.
+   */
+  interface Geometry {
+    /** Width of the line of prose, in CSS pixels. */
+    readonly measure: number;
+    /** The same, in characters of the page's own serif. */
+    readonly characters: number;
+    readonly frameHeight: number;
+    readonly marginWidth: number;
+    /** Whether the window itself scrolls sideways. */
+    readonly overflows: boolean;
+  }
+
+  const MEASURE = `(() => {
+    const page = document.querySelector('.page');
+    const frame = document.querySelector('.editor-frame');
+    const style = getComputedStyle(page);
+    const measure =
+      page.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+
+    const ruler = document.createElement('span');
+    ruler.style.cssText = 'position:absolute;visibility:hidden;white-space:pre';
+    ruler.style.font = style.font;
+    const sample = 'Plaintiff respectfully submits this memorandum in opposition.';
+    ruler.textContent = sample;
+    page.appendChild(ruler);
+    const character = ruler.getBoundingClientRect().width / sample.length;
+    ruler.remove();
+
+    return JSON.stringify({
+      measure: Math.round(measure),
+      characters: Math.round(measure / character),
+      frameHeight: Math.round(frame.getBoundingClientRect().height),
+      marginWidth: Math.round(
+        document.querySelector('.editor-margin').getBoundingClientRect().width,
+      ),
+      overflows: document.documentElement.scrollWidth > window.innerWidth,
+    });
+  })()`;
+
+  const geometry = async (page: Page): Promise<Geometry> =>
+    JSON.parse(await page.evaluate<string>(MEASURE)) as Geometry;
+
+  it("gives the document a readable line on a desktop screen", async () => {
+    // The editor used to be laid out as though the window were 1100px wide
+    // however large it was: two equal columns, a fixed 15rem comment margin
+    // subtracted from one of them whether or not there were any comments, and
+    // a 34rem letterbox. On a 1920x1080 screen that left 164px of text — about
+    // 25 characters, a narrower line than the same document got on a phone,
+    // and an 11,000px document seen through a 510px window.
+    const { page } = await open("", { width: 1920, height: 1080 });
+    await openDocument(page, LONG);
+
+    const seen = await geometry(page);
+    expect(seen.characters).toBeGreaterThanOrEqual(60);
+    expect(seen.characters).toBeLessThanOrEqual(90);
+    // Taller than the fixed 34rem/510px it used to be, on a screen with the
+    // room for it.
+    expect(seen.frameHeight).toBeGreaterThan(600);
+    // An empty margin is not a column: nothing is quoted until CourtListener
+    // has been asked, and until then that space belongs to the document.
+    expect(seen.marginWidth).toBe(0);
+    expect(seen.overflows).toBe(false);
+
+    await page.close();
+  }, 60_000);
+
+  it("keeps the line readable at every width, with no cliff between them", async () => {
+    // The margin used to be moved below the page by a viewport media query, so
+    // the decision was made by the window rather than by the column the editor
+    // actually had. At 960px the window stacked them and the text was 334px;
+    // one pixel wider it un-stacked, took 15rem back out of a 452px column,
+    // and the text collapsed to 94px. A container query asks the editor's own
+    // column, which is the only thing that knows.
+    const { page } = await open("", { width: 1280, height: 900 });
+    await openDocument(page, LONG);
+
+    for (const width of [2560, 1920, 1440, 1280, 1024, 961, 960, 900, 768]) {
+      await page.setViewportSize({ width, height: 900 });
+      const seen = await geometry(page);
+      expect(
+        seen.characters,
+        `${width}px wide: ${seen.measure}px of text, ${seen.characters} characters`,
+      ).toBeGreaterThanOrEqual(45);
+      expect(seen.overflows, `${width}px wide: the page scrolls sideways`).toBe(false);
+    }
+
+    await page.close();
+  }, 60_000);
 
   it("reads a blank line back as one blank line", async () => {
     // An empty paragraph is rendered `<p><br></p>`, because an empty `<p>`
