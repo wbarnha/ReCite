@@ -433,6 +433,81 @@ describe.skipIf(!runnable)("the published site in a browser", () => {
     await page.close();
   }, 60_000);
 
+  /** A document whose citation is fenced between two sentences nobody should see. */
+  const CONFIDENTIAL = [
+    "PRIVILEGED AND CONFIDENTIAL. Do not circulate this draft.",
+    "The Court held otherwise in Doe v. Roe, 526 U.S. 795 (U.S. 1999).",
+    "Counsel's strategy for the hearing is set out in the appendix.",
+  ].join("\n\n");
+
+  it("composes a report about a finding, without sending anything", async () => {
+    const { page } = await open();
+    await page.fill("textarea", CONFIDENTIAL);
+    await page.click("button:has-text('Check citations')");
+    await waitForMatch(page, ".status", /finding/i, 20_000);
+
+    await page.click("button:has-text('Report this')");
+    const preview = page.locator(".report-preview");
+    await preview.waitFor({ state: "visible", timeout: 20_000 });
+
+    // Everything a maintainer needs to reproduce it: the citation, the rule,
+    // the Bluebook being checked against, and the build that said so.
+    const report = await preview.inputValue();
+    expect(report).toContain("526 U.S. 795");
+    expect(report).toContain("CT005");
+    expect(report).toContain("Bluebook");
+    expect(report).toMatch(/[0-9a-f]{12}/);
+
+    // And nothing else out of the document.
+    expect(report).not.toContain("PRIVILEGED");
+    expect(report).not.toContain("strategy");
+
+    // Composing it is entirely local; the dialog says so and means it.
+    expect(offOrigin()).toEqual([]);
+    await page.close();
+  }, 60_000);
+
+  it("adds the surrounding sentence only when asked, and only the sentence", async () => {
+    const { page } = await open();
+    await page.fill("textarea", CONFIDENTIAL);
+    await page.click("button:has-text('Check citations')");
+    await waitForMatch(page, ".status", /finding/i, 20_000);
+    await page.click("button:has-text('Report this')");
+
+    const preview = page.locator(".report-preview");
+    await preview.waitFor({ state: "visible", timeout: 20_000 });
+    expect(await preview.inputValue()).not.toContain("Surrounding text");
+
+    await page.locator("label:has-text('Include the sentence') input").check();
+    const withContext = await preview.inputValue();
+
+    expect(withContext).toContain("The Court held otherwise");
+    // The sentence, not the paragraphs either side of it. This is the whole
+    // reason the excerpt is bounded rather than "some characters around it".
+    expect(withContext).not.toContain("PRIVILEGED");
+    expect(withContext).not.toContain("strategy");
+    await page.close();
+  }, 60_000);
+
+  it("offers a way to report a citation nothing was said about", async () => {
+    // A false positive hangs off a finding you can click. A miss hangs off
+    // nothing, and is the more valuable report of the two.
+    const { page } = await open();
+    await page.fill("textarea", "Varghese, 925 F.3d 1339 (11th Cir. 2019).");
+    await page.click("button:has-text('Check citations')");
+    await waitForMatch(page, ".status", /citation/i, 20_000);
+
+    await page.click(".report-prompt button");
+    const preview = page.locator(".report-preview");
+    await preview.waitFor({ state: "visible", timeout: 20_000 });
+
+    const report = await preview.inputValue();
+    expect(report).toContain("did not catch it");
+    expect(report).toContain("none — nothing was reported");
+    expect(offOrigin()).toEqual([]);
+    await page.close();
+  }, 60_000);
+
   it("shows the commit it was built from, linked to the source", async () => {
     // On a site that deploys on every push, the version number alone does not
     // identify a build. The commit does, and a link makes it usable.

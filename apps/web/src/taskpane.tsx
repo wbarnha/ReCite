@@ -15,14 +15,33 @@ import { AuthorityPicker } from "./components/AuthorityPicker.js";
 import { Findings } from "./components/Findings.js";
 import { Footer } from "./components/Footer.js";
 import { ProfilePicker } from "./components/ProfilePicker.js";
+import { ReportDialog } from "./components/ReportDialog.js";
+import { BUILD_INFO, REPO_URL, SHORT_COMMIT } from "./build-info.js";
+import { AUTHORITY_PROVENANCE } from "./authority.js";
+import type { ReportEnvironment } from "./feedback/report.js";
 import { WordHost } from "./host.js";
 import { SAMPLE_CORPUS } from "./sample.js";
+import { describeProfile, UPSTREAM_REVISION } from "@recite/core";
 import "./styles.css";
 import { useReCite } from "./useReCite.js";
 
 function TaskPane() {
   const host = useMemo(() => new WordHost(), []);
   const recite = useReCite({ host, corpus: SAMPLE_CORPUS });
+
+  // Word reads no file of its own, so there is no OCR caveat here — the rest
+  // is what makes a report actionable rather than a round trip.
+  const reportEnvironment: ReportEnvironment = useMemo(
+    () => ({
+      profile: describeProfile(recite.profile),
+      authority: AUTHORITY_PROVENANCE[recite.authoritySource],
+      version: BUILD_INFO.version,
+      commit: SHORT_COMMIT,
+      reporterData: UPSTREAM_REVISION,
+      format: "the open Word document",
+    }),
+    [recite.authoritySource, recite.profile],
+  );
 
   return (
     <div className="app pane">
@@ -111,7 +130,16 @@ function TaskPane() {
         checked={recite.result !== null}
         onReveal={recite.reveal}
         onApply={(diagnostic) => void recite.applyOne(diagnostic)}
+        onReport={recite.reportFinding}
       />
+
+      <p className="report-prompt">
+        Got a citation wrong, or missed one?{" "}
+        <button type="button" className="link-like" onClick={recite.reportCitation}>
+          Report it
+        </button>{" "}
+        — select it in the document first and it will be filled in.
+      </p>
 
       <Annotations
         annotations={recite.annotations}
@@ -119,6 +147,19 @@ function TaskPane() {
         onReveal={recite.reveal}
         destination="Written into the document as Word comments, next to the citation each one is about."
       />
+
+      {/*
+        Mounted only while it is open, so its fields start out holding this
+        report rather than the previous one.
+      */}
+      {recite.reporting && (
+        <ReportDialog
+          subject={recite.reporting}
+          environment={reportEnvironment}
+          repoUrl={REPO_URL}
+          onClose={recite.closeReport}
+        />
+      )}
 
       <Footer compact />
     </div>

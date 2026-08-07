@@ -821,3 +821,93 @@ button.cite.jump:focus-visible {
 .margin-note-jump:focus-visible {
   text-decoration: underline;
 }
+
+/* -------------------------------------------------------------- reporting --- */
+
+.report-link {
+  font-size: 0.8rem;
+}
+
+.report-prompt {
+  margin: 0.75rem 0 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+dialog.report {
+  width: min(44rem, 92vw);
+  max-height: 88vh;
+  overflow: auto;
+  padding: 1.25rem 1.5rem 1.5rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+dialog.report::backdrop {
+  background: rgb(0 0 0 / 45%);
+}
+
+dialog.report h2 {
+  margin-top: 0;
+  font-size: 1.05rem;
+}
+
+/* The one thing in here nobody should be able to miss. */
+.report-warning {
+  border-left: 3px solid var(--warning);
+}
+
+.report-warning p {
+  margin: 0 0 0.5rem;
+}
+
+.report-warning p:last-child {
+  margin-bottom: 0;
+}
+
+dialog.report label {
+  display: block;
+  margin: 0.9rem 0 0.25rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+dialog.report label.checkbox {
+  display: flex;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+dialog.report input[type="text"],
+dialog.report textarea,
+dialog.report select {
+  width: 100%;
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.35rem 0.45rem;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+/*
+ * The preview is the report, not a summary of it. Monospaced because it is
+ * Markdown that someone is about to paste somewhere, and scrollable rather
+ * than truncated: a report with a hidden second half would defeat the point
+ * of showing it at all.
+ */
+.report-preview {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.75rem !important;
+  line-height: 1.5;
+  white-space: pre;
+  overflow: auto;
+  background: var(--surface);
+}
+
+.report-actions {
+  margin-top: 1rem;
+}

@@ -12,8 +12,10 @@ import { Footer } from "./components/Footer.js";
 import { SaveAs } from "./components/SaveAs.js";
 import { OcrPicker } from "./components/OcrPicker.js";
 import { ProfilePicker } from "./components/ProfilePicker.js";
-import { BUILD_INFO, SHORT_COMMIT } from "./build-info.js";
+import { ReportDialog } from "./components/ReportDialog.js";
+import { BUILD_INFO, REPO_URL, SHORT_COMMIT } from "./build-info.js";
 import { AUTHORITY_PROVENANCE } from "./authority.js";
+import type { ReportEnvironment } from "./feedback/report.js";
 import type { EditorHandle } from "./document/host.js";
 import { EditorHost } from "./document/host.js";
 import type { RichDocument } from "./document/model.js";
@@ -73,6 +75,11 @@ function WebApp() {
         (start, end) => {
           const node = editor.current;
           if (node) revealInTextarea(node, start, end);
+        },
+        () => {
+          const node = editor.current;
+          if (!node) return "";
+          return node.value.slice(node.selectionStart, node.selectionEnd);
         },
       ),
     [],
@@ -137,6 +144,23 @@ function WebApp() {
       recite.profile,
       recite.result,
     ],
+  );
+
+  // What a report has to carry to be actionable: the same citation is a
+  // finding under one Bluebook and clean under another, `VF001` means
+  // different things against different authority sources, and a document read
+  // by OCR may simply not say what ReCite checked.
+  const reportEnvironment: ReportEnvironment = useMemo(
+    () => ({
+      profile: describeProfile(recite.profile),
+      authority: AUTHORITY_PROVENANCE[recite.authoritySource],
+      version: BUILD_INFO.version,
+      commit: SHORT_COMMIT,
+      reporterData: UPSTREAM_REVISION,
+      ...(imported ? { format: imported.format } : {}),
+      ...(imported?.ocr ? { ocrPages: imported.ocr.pages } : {}),
+    }),
+    [imported, recite.authoritySource, recite.profile],
   );
 
   return (
@@ -347,7 +371,10 @@ function WebApp() {
             checked={recite.result !== null}
             onReveal={recite.reveal}
             onApply={(diagnostic) => void recite.applyOne(diagnostic)}
+            onReport={recite.reportFinding}
           />
+
+          <ReportPrompt onReport={recite.reportCitation} />
 
           <Annotations
             annotations={recite.annotations}
@@ -358,8 +385,42 @@ function WebApp() {
         </section>
       </div>
 
+      {/*
+        Mounted only while it is open, so its fields start out holding this
+        report rather than the previous one.
+      */}
+      {recite.reporting && (
+        <ReportDialog
+          subject={recite.reporting}
+          environment={reportEnvironment}
+          repoUrl={REPO_URL}
+          onClose={recite.closeReport}
+        />
+      )}
+
       <Footer />
     </div>
+  );
+}
+
+/**
+ * The way to report a citation nothing was said about.
+ *
+ * A false positive is attached to a finding you can click. A **miss** is
+ * attached to nothing at all, and it is the more valuable report of the two —
+ * a rule that fires wrongly is annoying, a rule that stays silent on a bad
+ * citation is the failure the whole tool exists to prevent. So it needs a door
+ * of its own, and it sits under the findings whether there are any or not.
+ */
+function ReportPrompt({ onReport }: { onReport: () => void }) {
+  return (
+    <p className="report-prompt">
+      Got a citation wrong, or missed one?{" "}
+      <button type="button" className="link-like" onClick={onReport}>
+        Report it
+      </button>{" "}
+      — select the citation first and it will be filled in.
+    </p>
   );
 }
 

@@ -7,6 +7,8 @@ export interface FindingsProps {
   readonly citationCount: number;
   readonly onReveal?: (start: number, end: number) => void;
   readonly onApply?: (diagnostic: Diagnostic) => void;
+  /** Report this finding as wrong. See `components/ReportDialog.tsx`. */
+  readonly onReport?: (diagnostic: Diagnostic) => void;
   readonly checked: boolean;
 }
 
@@ -18,6 +20,7 @@ export function Findings({
   citationCount,
   onReveal,
   onApply,
+  onReport,
   checked,
 }: FindingsProps) {
   if (!checked) {
@@ -69,6 +72,7 @@ export function Findings({
           diagnostic={diagnostic}
           onReveal={onReveal}
           onApply={onApply}
+          onReport={onReport}
         />
       ))}
     </>
@@ -80,11 +84,13 @@ function Finding({
   diagnostic,
   onReveal,
   onApply,
+  onReport,
 }: {
   text: string;
   diagnostic: Diagnostic;
   onReveal?: (start: number, end: number) => void;
   onApply?: (diagnostic: Diagnostic) => void;
+  onReport?: (diagnostic: Diagnostic) => void;
 }) {
   const [line, column] = lineCol(text, diagnostic.span.start);
   const fix = diagnostic.correction;
@@ -129,11 +135,30 @@ function Finding({
         </div>
       )}
 
-      {fix && onApply && (
+      {(onReport || (fix && onApply)) && (
         <div className="actions">
-          <button type="button" onClick={() => onApply(diagnostic)}>
-            Apply this fix
-          </button>
+          {fix && onApply && (
+            <button type="button" onClick={() => onApply(diagnostic)}>
+              Apply this fix
+            </button>
+          )}
+          {/*
+            Next to the finding, not buried in a support page. Somebody who
+            believes this citation is correct is about to decide whether to
+            trust the rule that fired — and if the only way to say so is to
+            leave, open a tracker and describe the problem from memory, they
+            will do the rational thing instead and stop reading the rule.
+          */}
+          {onReport && (
+            <button
+              type="button"
+              className="report-link"
+              title="Tell us ReCite got this citation wrong"
+              onClick={() => onReport(diagnostic)}
+            >
+              Report this
+            </button>
+          )}
         </div>
       )}
     </article>
