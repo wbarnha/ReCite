@@ -185,28 +185,35 @@ suite cannot see it, because Chromium is not the engine that broke.
 `tools/test/platforms.test.ts` is the answer to that, and `.github/workflows/platforms.yml`
 runs it once per platform. Every job drives a **real engine**:
 
-| Platform           | Engine                     | Ships in       |
-| ------------------ | -------------------------- | -------------- |
-| `desktop-chromium` | Blink, V8                  | Chrome, Edge   |
-| `desktop-firefox`  | Gecko, SpiderMonkey        | Firefox        |
-| `desktop-webkit`   | WebKit, JavaScriptCore     | Safari         |
-| `android-chrome`   | Blink, V8, Pixel 7 metrics | Android Chrome |
-| `ios-safari`       | WebKit, JSC, iPhone 15     | Mobile Safari  |
+| Platform           | Engine                     | Relationship to what users run  |
+| ------------------ | -------------------------- | ------------------------------- |
+| `desktop-chromium` | Blink, V8                  | the engine Chrome and Edge ship |
+| `desktop-firefox`  | Gecko, SpiderMonkey        | the engine Firefox ships        |
+| `desktop-webkit`   | WebKit, JavaScriptCore     | WebKit **trunk** — see below    |
+| `blink-phone`      | Blink, V8, Pixel 7 metrics | Android Chrome **is** Blink     |
+| `webkit-phone`     | WebKit, JSC, iPhone 15     | **not** Mobile Safari           |
 
-The mobile rows are **not the same kind of claim**, and the difference matters:
+**No platform here is named for an operating system**, and that is the point.
+Playwright builds WebKit from the upstream `main` branch, so its JavaScriptCore
+is the same C++ sources Apple compiles — which is exactly why it can reproduce a
+`for…of` over a non-iterable, the fault the iPhone report described.
 
-- **Android Chrome is Blink.** Driving Blink with a phone's viewport, touch and
-  user agent differs from a real handset mostly in platform integration, so this
-  row is close to the real thing.
-- **`ios-safari` is not an iPhone.** Playwright's WebKit is built from WebKit
-  and runs JavaScriptCore, so it catches the class of bug above. It is not the
-  Safari Apple ships, it lags it, and it cannot see anything that depends on iOS
-  itself — the share sheet, the file picker, memory limits on a real device, or
-  a version of Safari older than the WebKit that Playwright bundles.
+But **trunk runs ahead of the Safari on anyone's phone.** So this suite cannot
+see a bug that shipping Safari still has and trunk has already fixed, and that
+is the majority of real iOS bug reports. Nor can it see anything belonging to
+iOS rather than to WebKit: the file picker, touch-only interaction, or the
+memory ceiling that kills the content process on a real handset — which, for an
+app that loads `pdfjs-dist` and `tesseract.js`, is a live risk.
 
-Nobody should read a green tick as "tested on an iPhone". It is "tested on the
-engine an iPhone runs, at an iPhone's size". That is a large improvement on
-"tested on Chromium" and is still not a device.
+The phone rows add a device descriptor — viewport, pixel ratio, touch and user
+agent — and nothing more. `blink-phone` is close to a handset because Android
+Chrome genuinely is Blink. `webkit-phone` is the right engine family at the
+right size and **is not an iPhone**.
+
+A green tick means "the engine family an iPhone runs, at an iPhone's size,
+slightly ahead of the version an iPhone has". That is a large improvement on
+"tested on Chromium" and it is not a device. Only a real handset, or Apple's own
+Safari driven by `safaridriver` on a macOS runner, can make the stronger claim.
 
 ### One build, every engine
 
@@ -225,7 +232,7 @@ a green tick for a platform nothing ran on. So:
   **failure**, because a job whose whole purpose is to run WebKit has done
   nothing of value if WebKit is absent.
 
-Run one platform locally with `RECITE_PLATFORMS=ios-safari pnpm test:platforms`,
+Run one platform locally with `RECITE_PLATFORMS=webkit-phone pnpm test:platforms`,
 after `pnpm exec playwright install webkit`.
 
 ### What goes in this suite

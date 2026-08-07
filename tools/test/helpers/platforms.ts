@@ -11,22 +11,25 @@
  * So the matrix here is organised by engine, not by screen size, and each entry
  * is honest about what running it does and does not prove:
  *
- * | Family  | Engine                     | How close is it?                    |
- * | ------- | -------------------------- | ----------------------------------- |
- * | desktop | Blink + V8                 | the engine Chrome and Edge ship      |
- * | desktop | Gecko + SpiderMonkey       | the engine Firefox ships             |
- * | desktop | WebKit + JavaScriptCore    | the engine Safari ships              |
- * | android | Blink + V8, phone metrics  | Android Chrome **is** Blink — close  |
- * | ios     | WebKit + JSC, phone metrics| same engine family as Mobile Safari  |
+ * | Engine                  | Relationship to what users run                     |
+ * | ----------------------- | -------------------------------------------------- |
+ * | Blink + V8              | the engine Chrome and Edge ship                    |
+ * | Gecko + SpiderMonkey    | the engine Firefox ships                           |
+ * | WebKit + JavaScriptCore | WebKit **trunk**, which is *ahead* of Safari        |
  *
- * The two mobile rows are not the same kind of claim. Android Chrome is Blink,
- * so driving Blink with a phone's viewport, touch and user agent differs from a
- * real handset mostly in platform integration. Playwright's WebKit is built
- * from WebKit and runs JavaScriptCore, so it catches the class of bug above —
- * but it is not the Safari Apple ships, it lags it, and it cannot see anything
- * that depends on iOS itself. `docs/testing.md` says so in more detail; the
- * point of writing it down is that nobody should read a green tick here as
- * "tested on an iPhone".
+ * That third row is why none of these ids says "iOS" or "Safari". Playwright
+ * builds WebKit from the upstream `main` branch, so its JavaScriptCore is the
+ * same C++ sources Apple compiles — which is exactly why it can reproduce a
+ * `for…of` over a non-iterable, the fault an iPhone reported here. But trunk
+ * runs *ahead* of the Safari on anyone's phone, so it cannot see a bug that
+ * shipping Safari still has and trunk has already fixed. That is the majority
+ * of real iOS bug reports, and it is a blind spot no label should paper over.
+ *
+ * The phone rows add a device descriptor: viewport, pixel ratio, touch and user
+ * agent. Nothing more. Android Chrome genuinely *is* Blink, so `blink-phone` is
+ * close to a handset; `webkit-phone` is the right engine family at the right
+ * size and is **not an iPhone**. Only a real device or a real Safari can make
+ * that claim — see `docs/testing.md`.
  */
 
 import { existsSync, readdirSync } from "node:fs";
@@ -66,20 +69,20 @@ export const PLATFORMS: readonly Platform[] = [
   },
   {
     id: "desktop-webkit",
-    label: "Desktop · Safari (WebKit, JavaScriptCore)",
+    label: "WebKit trunk and JavaScriptCore — not Safari",
     engine: "webkit",
     family: "desktop",
   },
   {
-    id: "android-chrome",
-    label: "Android · Chrome (Blink, V8)",
+    id: "blink-phone",
+    label: "Blink and V8, phone metrics — not a handset",
     engine: "chromium",
     family: "android",
     device: "Pixel 7",
   },
   {
-    id: "ios-safari",
-    label: "iOS · Safari (WebKit, JavaScriptCore)",
+    id: "webkit-phone",
+    label: "WebKit and JavaScriptCore, phone metrics — NOT iOS Safari",
     engine: "webkit",
     family: "ios",
     device: "iPhone 15",

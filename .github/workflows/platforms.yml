@@ -9,25 +9,27 @@ name: Platforms
 # iterating something with no iterator. A Chromium-only suite cannot see that,
 # because Chromium is not the engine that broke.
 #
-# So every job here runs a *real engine*:
+# So every job here runs a real engine:
 #
 #   Blink + V8                → the engine Chrome and Edge ship
 #   Gecko + SpiderMonkey      → the engine Firefox ships
-#   WebKit + JavaScriptCore   → the engine Safari ships
+#   WebKit + JavaScriptCore   → WebKit *trunk*, which is AHEAD of Safari
 #
-# The two mobile jobs pair an engine with a phone's viewport, touch and user
-# agent from a Playwright device descriptor. Read them precisely:
+# No job here is named for an operating system, and that is deliberate.
+# Playwright builds WebKit from the upstream `main` branch, so its
+# JavaScriptCore is the same C++ sources Apple compiles — which is why it can
+# reproduce the fault above. But trunk runs ahead of the Safari on anyone's
+# phone, so it cannot see a bug that shipping Safari still has and trunk has
+# already fixed, and that is the majority of real iOS bug reports.
 #
-#   android-chrome  Android Chrome IS Blink, so this differs from a handset
-#                   mostly in platform integration.
-#   ios-safari      Playwright's WebKit is built from WebKit and runs JSC, so
-#                   it catches the class of bug above — but it is NOT the
-#                   Safari Apple ships, it lags it, and it cannot see anything
-#                   that depends on iOS itself.
+# The phone jobs add a device descriptor — viewport, pixel ratio, touch, user
+# agent — and nothing else. Android Chrome genuinely IS Blink, so `blink-phone`
+# is close to a handset. `webkit-phone` is the right engine family at the right
+# size and is NOT an iPhone. Only a real device, or Apple's own Safari driven by
+# safaridriver on a macOS runner, can make that claim.
 #
-# Neither is a device farm and neither should be reported as "tested on an
-# iPhone". docs/testing.md sets out what a green tick here does and does not
-# entitle anyone to claim.
+# docs/testing.md sets out what a green tick here does and does not entitle
+# anyone to claim. Nobody should read one as "tested on an iPhone".
 
 on:
   push:
@@ -48,7 +50,7 @@ jobs:
   # which is the only thing this workflow is trying to measure.
   build:
     name: build the site once
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -75,36 +77,41 @@ jobs:
       matrix:
         include:
           - label: Desktop · Chrome and Edge (Blink) · Linux
-            os: ubuntu-latest
+            os: ubuntu-24.04
             platform: desktop-chromium
             engine: chromium
           - label: Desktop · Firefox (Gecko) · Linux
-            os: ubuntu-latest
+            os: ubuntu-24.04
             platform: desktop-firefox
             engine: firefox
-          - label: Desktop · Safari (WebKit) · Linux
-            os: ubuntu-latest
+          - label: WebKit trunk + JSC · Linux (not Safari)
+            os: ubuntu-24.04
             platform: desktop-webkit
             engine: webkit
-          - label: Android · Chrome (Blink)
-            os: ubuntu-latest
-            platform: android-chrome
+          - label: Blink + V8, phone metrics (not a handset)
+            os: ubuntu-24.04
+            platform: blink-phone
             engine: chromium
-          - label: iOS · Safari (WebKit)
-            os: ubuntu-latest
-            platform: ios-safari
+          - label: WebKit + JSC, phone metrics (NOT iOS Safari)
+            os: ubuntu-24.04
+            platform: webkit-phone
             engine: webkit
           # The two jobs below are about the operating system rather than the
           # engine: file pickers, downloads, fonts and path handling are where
           # a browser-based app meets the OS, and they are the things Linux
           # cannot answer for. Windows minutes bill at 2x and macOS at 10x, so
           # this is deliberately two jobs and not another full matrix.
-          - label: Desktop · Safari (WebKit) · macOS
-            os: macos-latest
+          #
+          # Runners are pinned rather than `-latest`. `macos-latest` is midway
+          # through moving from macOS 15 to 26, so it names different hardware
+          # and a different Xcode depending on when the job runs — which is not
+          # a variable a portability matrix should have.
+          - label: WebKit trunk + JSC · macOS (not Safari)
+            os: macos-15
             platform: desktop-webkit
             engine: webkit
           - label: Desktop · Chrome and Edge (Blink) · Windows
-            os: windows-latest
+            os: windows-2025
             platform: desktop-chromium
             engine: chromium
 
@@ -165,7 +172,7 @@ jobs:
     name: every platform passed
     if: always()
     needs: platforms
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Fail unless every platform job succeeded
         run: |
