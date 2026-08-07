@@ -296,19 +296,20 @@ describe.skipIf(!possible)("the published site in the Safari Apple ships", () =>
     // throws `undefined is not a function (near '...e of t...')` — which is
     // exactly, character for character, what an iPhone reported.
     //
-    // Not an assertion about the browser: `stream-async-iterator.ts` installs
-    // the missing iterator, so by the time a PDF is opened it is there either
-    // way. This records which of the two happened, so a future reader can see
-    // whether Safari has caught up and the polyfill can go.
+    // Not an assertion about the browser, because ReCite works either way:
+    // `stream-async-iterator.ts` installs the missing iterator when the PDF
+    // chunk is evaluated, and `opens a PDF` below proves that end to end.
+    //
+    // What this records is the *untouched* browser, read on a page that has
+    // not yet imported the PDF chunk and so has not yet been polyfilled. When
+    // a future run prints `function` here, Safari has caught up and the
+    // polyfill can go.
     await open();
     const native = await session.execute<string>(
-      `return JSON.stringify({
-         native: typeof ReadableStream.prototype[Symbol.asyncIterator],
-         afterPolyfill: null
-       })`,
+      "return typeof ReadableStream.prototype[Symbol.asyncIterator]",
     );
-    console.log(`  ReadableStream async iteration, natively: ${native}`);
-    expect(native).toContain("native");
+    console.log(`  ReadableStream async iteration, unpolyfilled: ${native}`);
+    expect(["function", "undefined"]).toContain(native);
   }, 120_000);
 
   it("loads the PDF engine chunk at all", async () => {
