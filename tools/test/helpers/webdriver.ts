@@ -20,6 +20,29 @@
 /** The key W3C uses to smuggle an element reference through JSON. */
 const ELEMENT_KEY = "element-6066-11e4-a52e-4f735466cecc";
 
+/** The key the pre-standard JSON Wire Protocol used, which remotes still send. */
+const LEGACY_ELEMENT_KEY = "ELEMENT";
+
+/**
+ * Pull the element reference out of a Find Element reply.
+ *
+ * Reading only the W3C key looks obviously right and is not: remotes differ on
+ * which key they answer with, and some send both. Getting this wrong does not
+ * announce itself — the lookup simply returns nothing, which is
+ * indistinguishable from "the element is not on the page", and the test fails
+ * somewhere else entirely saying `expected undefined`.
+ */
+function elementIdOf(reply: Record<string, unknown>): string | undefined {
+  for (const key of [ELEMENT_KEY, LEGACY_ELEMENT_KEY]) {
+    const value = reply[key];
+    if (typeof value === "string") return value;
+  }
+  // A reference under a key neither name predicted. The reply holds exactly one
+  // entry, so the single string in it is the reference.
+  const values = Object.values(reply).filter((v) => typeof v === "string");
+  return values.length === 1 ? values[0] : undefined;
+}
+
 interface Envelope<T> {
   readonly value: T;
 }
@@ -164,20 +187,32 @@ export class WebDriverSession {
 
   /** Returns the opaque element id, or `undefined` when there is no match. */
   async find(selector: string): Promise<string | undefined> {
+    let found: Record<string, unknown>;
     try {
-      const found = await send<Record<string, string>>(
+      found = await send<Record<string, unknown>>(
         this.base,
         "POST",
         `/session/${this.sessionId}/element`,
         { using: "css selector", value: selector },
       );
-      return found[ELEMENT_KEY];
     } catch (error) {
       if (error instanceof WebDriverError && error.code === "no such element") {
         return undefined;
       }
       throw error;
     }
+
+    const element = elementIdOf(found);
+    if (element === undefined) {
+      // Loud, and with the evidence in it. A silent `undefined` here reads as
+      // "no such element" and sends the reader hunting the page instead of the
+      // protocol, which is a whole CI round trip wasted.
+      throw new Error(
+        `Find Element answered for ${selector} with no recognisable element ` +
+          `reference. Keys: ${JSON.stringify(Object.keys(found))}`,
+      );
+    }
+    return element;
   }
 
   async click(elementId: string): Promise<void> {

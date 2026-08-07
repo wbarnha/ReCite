@@ -28,10 +28,8 @@
  * ```
  */
 
-import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { type Server } from "node:http";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
@@ -68,8 +66,6 @@ describe.skipIf(!possible)("the published site in the Safari Apple ships", () =>
   let server: Server;
   let origin: string;
   let session: WebDriverSession;
-  /** Where fixtures are written, since a file input takes a path over WebDriver. */
-  let fixtures: string;
 
   beforeAll(async () => {
     if (!(await reachable(endpoint!))) {
@@ -82,7 +78,6 @@ describe.skipIf(!possible)("the published site in the Safari Apple ships", () =>
 
     ({ server, origin } = await serveSite({ collectErrors: true }));
     session = await WebDriverSession.open(endpoint!, "safari");
-    fixtures = mkdtempSync(join(tmpdir(), "recite-safari-"));
 
     // Printed so a green run always says which browser was green. A matrix
     // that claims Safari is worth nothing if nobody can see the version.
@@ -111,12 +106,36 @@ describe.skipIf(!possible)("the published site in the Safari Apple ships", () =>
     return session.execute<string[]>("return window.__reciteErrors || []");
   }
 
-  /** Write a fixture and hand its path to the file input, as W3C prescribes. */
+  /**
+   * Put a file on the file input, from inside the page.
+   *
+   * W3C attaches a file by sending a path to the input, which is the faithful
+   * route and is not available here: the input is deliberately hidden — a
+   * visually-hidden control behind a styled label, which is how the drop zone
+   * is built — and a remote may decline to type into something it cannot see.
+   *
+   * So the `File` is constructed in the page and assigned through a
+   * `DataTransfer`, then `change` is dispatched. That is the same object and
+   * the same event the browser produces when someone picks a file, so
+   * `FileDrop`'s handler and everything under it run exactly as they would;
+   * only the native picker, which no driver can automate anyway, is skipped.
+   * Verified against Chromium before being relied on here.
+   */
   async function openFile(name: string, contents: Buffer | string): Promise<void> {
-    const path = join(fixtures, name);
-    writeFileSync(path, contents);
-    const input = await waitForElement(session, "input[type=file]");
-    await session.sendKeys(input, path);
+    const base64 = Buffer.from(contents).toString("base64");
+    const attached = await session.execute<string>(
+      `var input = document.querySelector('input[type=file]');
+       if (!input) return 'no file input on the page';
+       var raw = atob(${JSON.stringify(base64)});
+       var bytes = new Uint8Array(raw.length);
+       for (var i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+       var transfer = new DataTransfer();
+       transfer.items.add(new File([bytes], ${JSON.stringify(name)}));
+       input.files = transfer.files;
+       input.dispatchEvent(new Event('change', { bubbles: true }));
+       return 'ok';`,
+    );
+    expect(attached, `could not attach ${name}`).toBe("ok");
   }
 
   it("loads and runs without a script error", async () => {

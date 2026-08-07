@@ -190,6 +190,47 @@ describe("the WebDriver client", () => {
     });
   });
 
+  it("accepts the legacy element key that real remotes still send", async () => {
+    // The bug that turned the Safari job red twice. Reading only the W3C key
+    // made every lookup return nothing, which is indistinguishable from "the
+    // element is not on the page" — so the failure pointed at the app instead
+    // of at the protocol, including for a plainly visible `textarea`.
+    stub((call) =>
+      call.url.endsWith("/session")
+        ? { value: { sessionId: "s1", capabilities: {} } }
+        : { value: { ELEMENT: "legacy-7" } },
+    );
+
+    const session = await WebDriverSession.open(BASE);
+    expect(await session.find("textarea")).toBe("legacy-7");
+  });
+
+  it("takes the reference even under a key neither name predicted", async () => {
+    stub((call) =>
+      call.url.endsWith("/session")
+        ? { value: { sessionId: "s1", capabilities: {} } }
+        : { value: { "some-future-key": "e42" } },
+    );
+
+    const session = await WebDriverSession.open(BASE);
+    expect(await session.find("textarea")).toBe("e42");
+  });
+
+  it("says what came back when it cannot find a reference at all", async () => {
+    // Loud rather than silent: a bare `undefined` here reads as "no such
+    // element" and sends the reader hunting the page rather than the protocol.
+    stub((call) =>
+      call.url.endsWith("/session")
+        ? { value: { sessionId: "s1", capabilities: {} } }
+        : { value: { unexpected: 12, alsoUnexpected: 13 } },
+    );
+
+    const session = await WebDriverSession.open(BASE);
+    await expect(session.find("textarea")).rejects.toThrow(
+      /no recognisable element reference.*unexpected/s,
+    );
+  });
+
   it("clears the page before navigating, so a stale document cannot be observed", async () => {
     // The bug this exists to hold. Navigating straight from one page of the app
     // to another left the previous document readable, so a wait for `h1` — which
