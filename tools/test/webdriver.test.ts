@@ -14,7 +14,12 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { reachable, WebDriverError, WebDriverSession } from "./helpers/webdriver.js";
+import {
+  reachable,
+  waitForElement,
+  WebDriverError,
+  WebDriverSession,
+} from "./helpers/webdriver.js";
 
 const ELEMENT_KEY = "element-6066-11e4-a52e-4f735466cecc";
 
@@ -46,6 +51,11 @@ function stub(reply: (call: Call) => { status?: number; value: unknown }): Call[
 }
 
 const BASE = "http://127.0.0.1:4444";
+
+/** Open a session against whatever stub is installed, discarding the calls. */
+async function session_(_calls: Call[]) {
+  return WebDriverSession.open(BASE);
+}
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -95,12 +105,18 @@ describe("the WebDriver client", () => {
     await session.navigate("http://example.test/ReCite/");
     const title = await session.execute<string>("return document.title");
 
+    // Two navigations: `about:blank` first, so the previous document cannot be
+    // mistaken for the one that was asked for.
     expect(calls[1]).toMatchObject({
       url: `${BASE}/session/s1/url`,
       method: "POST",
-      body: { url: "http://example.test/ReCite/" },
+      body: { url: "about:blank" },
     });
     expect(calls[2]).toMatchObject({
+      url: `${BASE}/session/s1/url`,
+      body: { url: "http://example.test/ReCite/" },
+    });
+    expect(calls[3]).toMatchObject({
       url: `${BASE}/session/s1/execute/sync`,
       body: { script: "return document.title", args: [] },
     });
@@ -172,6 +188,78 @@ describe("the WebDriver client", () => {
       text: "/tmp/a.pdf",
       value: [..."/tmp/a.pdf"],
     });
+  });
+
+  it("clears the page before navigating, so a stale document cannot be observed", async () => {
+    // The bug this exists to hold. Navigating straight from one page of the app
+    // to another left the previous document readable, so a wait for `h1` — which
+    // both pages have — matched instantly and handed back a document being torn
+    // down. Every lookup against it then found nothing, and real Safari failed
+    // three tests in 200ms each while reporting only "expected undefined".
+    const calls = stub((call) =>
+      call.url.endsWith("/session")
+        ? { value: { sessionId: "s1", capabilities: {} } }
+        : { value: null },
+    );
+
+    const session = await WebDriverSession.open(BASE);
+    await session.navigate("http://example.test/ReCite/");
+
+    expect(calls.slice(1).map((c) => (c.body as { url: string }).url)).toEqual([
+      "about:blank",
+      "http://example.test/ReCite/",
+    ]);
+  });
+
+  it("does not blank the page when the target is already about:blank", async () => {
+    const calls = stub((call) =>
+      call.url.endsWith("/session")
+        ? { value: { sessionId: "s1", capabilities: {} } }
+        : { value: null },
+    );
+
+    const session = await WebDriverSession.open(BASE);
+    await session.navigate("about:blank");
+    expect(calls).toHaveLength(2);
+  });
+
+  it("waits for an element instead of asking once", async () => {
+    // React renders after the document is ready, so a single-shot lookup races
+    // the first render — and loses silently, because a miss looks exactly like
+    // "there is no such element".
+    let polls = 0;
+    const calls = stub((call) => {
+      if (call.url.endsWith("/session")) {
+        return { value: { sessionId: "s1", capabilities: {} } };
+      }
+      if (call.url.endsWith("/execute/sync")) {
+        polls += 1;
+        return { value: polls >= 3 };
+      }
+      return { value: { [ELEMENT_KEY]: "e9" } };
+    });
+
+    expect(await waitForElement(await session_(calls), "textarea", 5_000)).toBe("e9");
+    expect(polls, "it should have polled until the element appeared").toBe(3);
+  });
+
+  it("says so when an element appears and then vanishes", async () => {
+    // The handle would belong to a document that has been replaced, and every
+    // later use of it fails with a stale-element error instead of this one.
+    const calls = stub((call) => {
+      if (call.url.endsWith("/session")) {
+        return { value: { sessionId: "s1", capabilities: {} } };
+      }
+      if (call.url.endsWith("/execute/sync")) return { value: true };
+      return {
+        status: 404,
+        value: { error: "no such element", message: "gone" },
+      };
+    });
+
+    await expect(waitForElement(await session_(calls), ".page", 2_000)).rejects.toThrow(
+      /still changing/,
+    );
   });
 
   it("treats an unreachable server as absent rather than throwing", async () => {

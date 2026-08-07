@@ -36,7 +36,12 @@ import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { BASE_PATH, serveSite, siteIsBuilt } from "./helpers/site-server.js";
-import { reachable, waitFor, WebDriverSession } from "./helpers/webdriver.js";
+import {
+  reachable,
+  waitFor,
+  waitForElement,
+  WebDriverSession,
+} from "./helpers/webdriver.js";
 
 /**
  * Opt in explicitly.
@@ -110,9 +115,8 @@ describe.skipIf(!possible)("the published site in the Safari Apple ships", () =>
   async function openFile(name: string, contents: Buffer | string): Promise<void> {
     const path = join(fixtures, name);
     writeFileSync(path, contents);
-    const input = await session.find("input[type=file]");
-    expect(input, "the file input is missing").toBeDefined();
-    await session.sendKeys(input!, path);
+    const input = await waitForElement(session, "input[type=file]");
+    await session.sendKeys(input, path);
   }
 
   it("loads and runs without a script error", async () => {
@@ -122,10 +126,9 @@ describe.skipIf(!possible)("the published site in the Safari Apple ships", () =>
 
   it("checks a citation", async () => {
     await open();
-    const textarea = await session.find("textarea");
-    expect(textarea).toBeDefined();
+    const textarea = await waitForElement(session, "textarea");
     await session.sendKeys(
-      textarea!,
+      textarea,
       "Doe v. Roe, 526 U.S. 795 (U.S. 1999); Miller, 174 F.3d 366, 371 (2d Cir. 1999).",
     );
 

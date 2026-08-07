@@ -128,7 +128,21 @@ export class WebDriverSession {
     return `${text("browserName", "unknown")} ${text("browserVersion", "?")} on ${text("platformName", "?")}`;
   }
 
+  /**
+   * Go to a URL, by way of a blank page.
+   *
+   * Navigating straight from one page of the app to another leaves the old
+   * document readable for a moment, and anything that waits for a marker the
+   * old page also had — an `h1`, a heading, a title — matches immediately and
+   * hands back a document that is being torn down. Clearing first means a
+   * marker can only come from the page that was asked for.
+   */
   async navigate(url: string): Promise<void> {
+    if (url !== "about:blank") {
+      await send(this.base, "POST", `/session/${this.sessionId}/url`, {
+        url: "about:blank",
+      });
+    }
     await send(this.base, "POST", `/session/${this.sessionId}/url`, { url });
   }
 
@@ -196,6 +210,41 @@ export class WebDriverSession {
       () => undefined,
     );
   }
+}
+
+/**
+ * Wait for an element to exist, then return its id.
+ *
+ * `find` asks once. WebDriver has no auto-waiting of any kind, and this app
+ * renders through React after the document is ready, so a single-shot lookup
+ * races the first render — and races it *invisibly*, because a miss is
+ * indistinguishable from "the element is not there at all".
+ *
+ * Existence is checked in the page rather than by retrying `find`, so the
+ * handle that comes back always belongs to the document that is current now.
+ * A handle taken from a document that has since been replaced is stale, and
+ * every use of it fails with a different and more confusing error.
+ */
+export async function waitForElement(
+  session: WebDriverSession,
+  selector: string,
+  timeoutMs = 30_000,
+): Promise<string> {
+  await waitFor<boolean>(
+    session,
+    `return !!document.querySelector(${JSON.stringify(selector)})`,
+    (present) => present,
+    timeoutMs,
+    `an element matching ${selector}`,
+  );
+
+  const element = await session.find(selector);
+  if (!element) {
+    throw new Error(
+      `${selector} was in the document and then was not — the page is still changing`,
+    );
+  }
+  return element;
 }
 
 /**
