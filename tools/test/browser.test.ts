@@ -297,6 +297,129 @@ describe.skipIf(!runnable)("the published site in a browser", () => {
     await page.close();
   }, 60_000);
 
+  /**
+   * A document with the citation buried in the middle of it.
+   *
+   * The middle, not the end: a jump that landed at the bottom would be
+   * indistinguishable from the surface simply being scrolled to the bottom,
+   * which is where typing into it leaves you.
+   */
+  const LONG = [
+    ...Array.from({ length: 60 }, (_, i) => `Paragraph ${i + 1} of the argument.`),
+    "See Doe v. Roe, 526 U.S. 795 (U.S. 1999), which is dispositive.",
+    ...Array.from({ length: 60 }, (_, i) => `Paragraph ${i + 62} of the argument.`),
+  ].join("\n\n");
+
+  it("reads a blank line back as one blank line", async () => {
+    // An empty paragraph is rendered `<p><br></p>`, because an empty `<p>`
+    // collapses and the caret cannot reach it. Reading that back as *two*
+    // paragraphs put every offset after the first blank line out by one — so
+    // findings painted nothing and a jump landed nowhere, on almost every real
+    // document. Saving as `.txt` is the end-to-end way to ask.
+    const body = "First paragraph.\n\nSecond paragraph.\n\n\nThird.";
+    const { page } = await open();
+    await openDocument(page, body);
+
+    await page.selectOption(".saveas select", "txt");
+    const [download] = await Promise.all([
+      page.waitForEvent("download", { timeout: 20_000 }),
+      page.click(".saveas button"),
+    ]);
+
+    const stream = await download.createReadStream();
+    const chunks: Buffer[] = [];
+    for await (const chunk of stream) chunks.push(chunk as Buffer);
+    expect(Buffer.concat(chunks).toString("utf8")).toBe(body);
+    await page.close();
+  }, 60_000);
+
+  it("jumps to the citation when the citation is clicked, in the text box", async () => {
+    // Selecting a span is not enough: `setSelectionRange` does not scroll, so
+    // a citation below the fold would highlight where nobody can see it and
+    // the click would look like it did nothing.
+    const { page } = await open();
+    await page.fill("textarea", LONG);
+    await page.click("button:has-text('Check citations')");
+    await waitForMatch(page, ".status", /finding/i, 20_000);
+
+    // Typing into a textarea leaves it scrolled to the caret, at the bottom.
+    await page.evaluate("document.querySelector('textarea').scrollTop = 0");
+    await page.click("button.cite.jump");
+
+    // The selection is the span the *rule* is about, which for CT005 is the
+    // redundant `(U.S.` and not the whole citation — landing on the offending
+    // characters is the point. So the assertion is that it landed somewhere
+    // inside the citation the button showed, not on a fixed string.
+    const label = await page.locator("button.cite.jump").first().textContent();
+    const selected = await page.evaluate(
+      "document.querySelector('textarea').value.slice(" +
+        "document.querySelector('textarea').selectionStart," +
+        "document.querySelector('textarea').selectionEnd)",
+    );
+    expect(selected).not.toBe("");
+    expect(label).toContain(selected);
+
+    // Somewhere in the middle: scrolled, but not simply flung to the end.
+    const scrolled = await page.evaluate(
+      "document.querySelector('textarea').scrollTop",
+    );
+    const furthest = await page.evaluate(
+      "document.querySelector('textarea').scrollHeight -" +
+        " document.querySelector('textarea').clientHeight",
+    );
+    expect(scrolled).toBeGreaterThan(0);
+    expect(scrolled).toBeLessThan(furthest as number);
+    await page.close();
+  }, 60_000);
+
+  it("jumps to the citation when the citation is clicked, in the editor", async () => {
+    const { page } = await open();
+    await openDocument(page, LONG);
+    await page.click("button:has-text('Check citations')");
+    await waitForMatch(page, ".status", /finding/i, 20_000);
+
+    // Dispatched rather than clicked: Playwright scrolls an element into view
+    // before a real click, which would be indistinguishable from the app
+    // scrolling the window — and not scrolling the window is half of what this
+    // test is about.
+    await page.evaluate("window.scrollTo(0, 0)");
+    await page.locator("button.cite.jump").first().dispatchEvent("click");
+
+    // The document itself agrees about where the finding was, not just the
+    // scroll position — and it selects the span the rule is about, which is
+    // part of the citation rather than all of it.
+    const label = await page.locator("button.cite.jump").first().textContent();
+    const selected = await page.evaluate("getSelection().toString()");
+    expect(selected).not.toBe("");
+    expect(label).toContain(selected);
+
+    // The frame scrolls, not the window: the panel the click came from has to
+    // stay where it was, which is why `focus` is called with `preventScroll`.
+    expect(
+      await page.evaluate("document.querySelector('.editor-frame').scrollTop"),
+    ).toBeGreaterThan(0);
+    expect(await page.evaluate("window.scrollY")).toBe(0);
+
+    // And a moment of colour, so the eye finds it once it is on screen.
+    expect(await page.evaluate("CSS.highlights.has('recite-target')")).toBe(true);
+    await page.close();
+  }, 60_000);
+
+  it("says so rather than doing nothing when the citation has been edited away", async () => {
+    // Offsets come from the last check; the document can move underneath them.
+    const { page } = await open();
+    await page.fill("textarea", "Doe v. Roe, 526 U.S. 795 (U.S. 1999).");
+    await page.click("button:has-text('Check citations')");
+    await waitForMatch(page, ".status", /finding/i, 20_000);
+
+    await page.fill("textarea", "Something else entirely.");
+    await page.click("button.cite.jump");
+    expect(await waitForMatch(page, ".status", /Could not jump/i, 20_000)).toMatch(
+      /Could not jump/i,
+    );
+    await page.close();
+  }, 60_000);
+
   it("goes back to a text box on request, and forward again", async () => {
     // Neither surface is a trap.
     const { page } = await open();

@@ -82,7 +82,37 @@ describe("BrowserHost", () => {
       () => {},
       select,
     );
-    await host.reveal("some text", 5, 9);
+    expect(await host.reveal("some text", 5, 9)).toEqual({ found: true });
     expect(select).toHaveBeenCalledWith(5, 9);
+  });
+
+  it("says so rather than silently doing nothing when the span has gone", async () => {
+    // Offsets come from the last check. If the document has been edited since,
+    // a click that quietly did nothing reads as a broken button — and one that
+    // scrolled confidently to whatever now sits there would point at an
+    // innocent citation and call it the finding.
+    const select = vi.fn();
+    const host = new BrowserHost(
+      () => "short",
+      () => {},
+      select,
+    );
+    const outcome = await host.reveal("a much longer document, 410 U.S. 113", 23, 35);
+
+    expect(outcome.found).toBe(false);
+    expect(outcome.reason).toMatch(/changed since the check/);
+    expect(select).not.toHaveBeenCalled();
+  });
+
+  it("jumps when the live document still has that text at those offsets", async () => {
+    const select = vi.fn();
+    const text = "See 410 U.S. 113 (1973).";
+    const host = new BrowserHost(
+      () => text,
+      () => {},
+      select,
+    );
+    expect(await host.reveal(text, 4, 16)).toEqual({ found: true });
+    expect(select).toHaveBeenCalledWith(4, 16);
   });
 });

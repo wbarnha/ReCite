@@ -11,7 +11,7 @@ import {
 
 import type { EditorHandle } from "../document/host.js";
 import type { HighlightName } from "../document/highlight.js";
-import { highlightsSupported, paint } from "../document/highlight.js";
+import { flash, highlightsSupported, paint } from "../document/highlight.js";
 import type { MarkName, RichDocument } from "../document/model.js";
 import { applyCorrectionsRich, richToText, toggleMark } from "../document/model.js";
 import {
@@ -39,6 +39,8 @@ const LAYER: Record<Diagnostic["severity"], HighlightName> = {
 };
 
 export interface DocumentEditorProps {
+  /** Jump to a span — the same action the findings panel uses. */
+  readonly onReveal?: (start: number, end: number) => void;
   /**
    * The document to edit. Read once, when its identity changes.
    *
@@ -83,7 +85,7 @@ interface Bubble {
  */
 export const DocumentEditor = forwardRef<EditorHandle, DocumentEditorProps>(
   function DocumentEditor(
-    { initial, diagnostics, annotations, onInput, disabled = false },
+    { initial, diagnostics, annotations, onInput, onReveal, disabled = false },
     ref,
   ) {
     const host = useRef<HTMLDivElement>(null);
@@ -158,6 +160,10 @@ export const DocumentEditor = forwardRef<EditorHandle, DocumentEditorProps>(
       return () => window.removeEventListener("resize", onResize);
     }, [refresh]);
 
+    /** Undoes the last jump's flash, so a second click replaces the first. */
+    const cancelFlash = useRef<(() => void) | null>(null);
+    useEffect(() => () => cancelFlash.current?.(), []);
+
     const settle = useRef<number | undefined>(undefined);
     const onEdit = useCallback(() => {
       window.clearTimeout(settle.current);
@@ -211,18 +217,54 @@ export const DocumentEditor = forwardRef<EditorHandle, DocumentEditorProps>(
             text,
           };
         },
-        reveal: (start, end) => {
+        reveal: (start, end, expected) => {
           const node = host.current;
-          if (!node) return;
+          const box = frame.current;
+          if (!node || !box) {
+            return { found: false, reason: "the editor is not open" };
+          }
+
           const document_ = read(node);
+          // Checked against what is in the editor now. Offsets from the last
+          // check describe a document that may since have been typed into, and
+          // pointing confidently at whatever now sits there would name an
+          // innocent citation as the finding.
+          if (
+            expected !== undefined &&
+            richToText(document_).slice(start, end) !== expected
+          ) {
+            return {
+              found: false,
+              reason: "the document has changed since the check — check it again",
+            };
+          }
+
           const range = rangeFor(node, document_, start, end);
-          if (!range) return;
-          node.focus();
+          if (!range) {
+            return {
+              found: false,
+              reason: "that citation is no longer in the document — check it again",
+            };
+          }
+
+          // `preventScroll`, or focusing the page would scroll the window to
+          // it — undoing the whole point of scrolling the frame below, and
+          // taking the panel the click came from off screen.
+          node.focus({ preventScroll: true });
           selectOffsets(node, document_, start, end);
-          range.startContainer.parentElement?.scrollIntoView({
-            block: "center",
-            behavior: "smooth",
-          });
+
+          // Scroll the frame, not the page. The frame is the element with the
+          // overflow, and `scrollIntoView` on an ancestor of the range would
+          // move the whole window instead — jarring, and it loses the panel of
+          // findings the click came from.
+          const citation = range.getBoundingClientRect();
+          const visible = box.getBoundingClientRect();
+          box.scrollTop +=
+            citation.top - visible.top - visible.height / 2 + citation.height / 2;
+
+          cancelFlash.current?.();
+          cancelFlash.current = flash(range);
+          return { found: true };
         },
       }),
       [onInput],
@@ -304,10 +346,23 @@ export const DocumentEditor = forwardRef<EditorHandle, DocumentEditorProps>(
                 }
                 style={{ top: `${top}px` }}
               >
-                <header>
+                {/*
+                  The note points at a citation, so clicking it goes there —
+                  the mirror of clicking the citation to bring the note
+                  forward. A heading is the affordance a reader expects to be
+                  the link.
+                */}
+                <button
+                  type="button"
+                  className="margin-note-jump"
+                  onClick={() => {
+                    setActive(annotation.citationIndex);
+                    onReveal?.(annotation.span.start, annotation.span.end);
+                  }}
+                >
                   {annotation.caseName}
                   {annotation.pinCite ? `, at ${annotation.pinCite}` : ""}
-                </header>
+                </button>
                 {annotation.quotation ? (
                   <blockquote>{annotation.quotation}</blockquote>
                 ) : (

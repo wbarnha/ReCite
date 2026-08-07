@@ -55,6 +55,21 @@ point is better than discovering it halfway through a document.
 Anchoring uses the same "find the Nth occurrence" manoeuvre a correction uses,
 for the reason described below.
 
+## Jumping to a citation
+
+Click the citation in a finding and Word scrolls to it and selects it. Same for
+the citation on a pincite quotation.
+
+It uses the same manoeuvre a fix does — find the Nth occurrence of that exact
+string — because Office.js has no character offsets to jump to. `Range.select()`
+is what makes Word bring it on screen.
+
+Which means it can miss, and it says so instead of doing nothing. The offsets
+come from the last check, and a Word document can be edited between the check
+and the click — including by somebody else, in another window. When the search
+finds no match the pane reports **"that citation is no longer in the document —
+check it again"** rather than leaving a button that appears not to work.
+
 ## How a fix is applied
 
 Office.js exposes no character offsets into the document, so a correction

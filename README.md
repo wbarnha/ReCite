@@ -190,7 +190,7 @@ quotations in a margin beside the citations they belong to.
 | ------------------ | ---------------------------------------------------------- |
 | Editing            | type, cut, paste, undo                                     |
 | Formatting         | bold, italic, underline — toolbar or <kbd>Ctrl</kbd>+B/I/U |
-| Findings           | marked in the text as you check, by severity               |
+| Findings           | marked in the text; click one to jump to it                |
 | Fixes              | applied in place, keeping the formatting around them       |
 | Pincite quotations | in the margin, anchored to the citation                    |
 
@@ -289,6 +289,20 @@ Everything is built in the page and handed to the browser as a download. There
 is no upload and no round trip, exactly as when reading a file. Reports record
 the commit that produced them, so a note in a file can be traced to an exact
 build.
+
+## Jumping to a citation
+
+Click the citation in a finding and the document goes there: it scrolls to it,
+selects it, and lights it up for a moment. Same in the Word add-in, where Word
+scrolls its own document, and same for the citation on a pincite quotation.
+
+There is no separate **Show** button. A finding is a claim about a specific run
+of characters, and the natural way to ask "where is that?" is to press the
+thing itself.
+
+A jump can miss — offsets come from the last check, and the document may have
+been edited since, in Word possibly by somebody else in another window. When it
+does, ReCite says so rather than leaving a button that appears not to work.
 
 ## Fixing
 
@@ -405,7 +419,7 @@ change to a single rule.
 ```console
 $ pnpm install
 $ pnpm dev            # web app on :3000
-$ pnpm test           # 1103 tests
+$ pnpm test           # 1105 tests
 $ pnpm check          # lint + format + types + tests, what CI runs
 $ pnpm build:release  # build, generate manifest.xml, write checksums
 ```

@@ -26,6 +26,7 @@ import { cacheSize, forgetAll } from "./import/cache.js";
 import { charsPerSecond, describePhases, formatMs } from "./import/metrics.js";
 import type { ReportContext } from "./export/index.js";
 import { SAMPLE_CORPUS, SAMPLE_TEXT } from "./sample.js";
+import { revealInTextarea } from "./textarea.js";
 import "./styles.css";
 import { describeProfile, UPSTREAM_REVISION } from "@recite/core";
 
@@ -67,11 +68,11 @@ function WebApp() {
       new BrowserHost(
         () => editor.current?.value ?? "",
         (next) => setDraft(next),
+        // Selecting a span does not bring it into view; a citation
+        // highlighted below the fold looks like a button that did nothing.
         (start, end) => {
           const node = editor.current;
-          if (!node) return;
-          node.focus();
-          node.setSelectionRange(start, end);
+          if (node) revealInTextarea(node, start, end);
         },
       ),
     [],
@@ -238,6 +239,7 @@ function WebApp() {
               diagnostics={recite.result?.diagnostics ?? []}
               annotations={recite.annotations}
               onInput={setDraft}
+              onReveal={recite.reveal}
               disabled={recite.busy}
             />
           ) : (

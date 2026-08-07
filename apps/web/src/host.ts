@@ -19,14 +19,36 @@ export interface ApplyOutcome {
   readonly text?: string;
 }
 
+/**
+ * Whether a jump to a citation actually landed.
+ *
+ * Reported rather than swallowed. Offsets come from the last check, and the
+ * document may have been edited since — in Word it may have been edited by
+ * somebody else, in another window. A click that silently does nothing reads
+ * as a broken button; "that citation is not there any more" reads as what it
+ * is, and tells the user to check again.
+ */
+export interface RevealOutcome {
+  readonly found: boolean;
+  readonly reason?: string;
+}
+
+export const REVEALED: RevealOutcome = { found: true };
+
 export interface DocumentHost {
   readonly kind: "browser" | "word";
   /** Shown in the UI so the user knows what is being checked. */
   readonly label: string;
   read(): Promise<string>;
   apply(text: string, corrections: readonly Correction[]): Promise<ApplyOutcome>;
-  /** Draw the user's attention to a span. Optional; Word can, a textarea can too. */
-  reveal?(text: string, start: number, end: number): Promise<void>;
+  /**
+   * Jump to a span and select it.
+   *
+   * Every surface can do this, and each does it differently: a textarea has
+   * offsets but no scrolling, the editor has a DOM range, and Word has neither
+   * and has to search for the text instead.
+   */
+  reveal?(text: string, start: number, end: number): Promise<RevealOutcome>;
   /**
    * Write notes into the document as comments.
    *
@@ -48,6 +70,7 @@ export class BrowserHost implements DocumentHost {
   constructor(
     private getText: () => string,
     private setText: (next: string) => void,
+    /** Select the span and scroll it into view. See `textarea.ts`. */
     private select?: (start: number, end: number) => void,
   ) {}
 
@@ -65,9 +88,27 @@ export class BrowserHost implements DocumentHost {
     });
   }
 
-  reveal(_text: string, start: number, end: number): Promise<void> {
+  /**
+   * Checked against the *live* text, not the text of the last check.
+   *
+   * The two are the same until somebody edits the document, and after that the
+   * offsets describe a document that no longer exists. Scrolling confidently
+   * to whatever now sits at those characters is worse than admitting the miss:
+   * it points at an innocent citation and calls it the finding.
+   */
+  reveal(text: string, start: number, end: number): Promise<RevealOutcome> {
+    const wanted = text.slice(start, end);
+    if (!wanted) {
+      return Promise.resolve({ found: false, reason: "there is nothing to jump to" });
+    }
+    if (this.getText().slice(start, end) !== wanted) {
+      return Promise.resolve({
+        found: false,
+        reason: "the document has changed since the check — check it again",
+      });
+    }
     this.select?.(start, end);
-    return Promise.resolve();
+    return Promise.resolve(REVEALED);
   }
 }
 
@@ -143,20 +184,38 @@ export class WordHost implements DocumentHost {
     return { applied, skipped: corrections.length - applied };
   }
 
-  async reveal(text: string, start: number, end: number): Promise<void> {
+  /**
+   * Scroll Word to the citation and select it.
+   *
+   * The same "find the Nth occurrence" manoeuvre a correction uses, because
+   * Office.js has no character offsets — and `Range.select()` is what makes
+   * Word bring it on screen. The occurrence index is what keeps the jump on
+   * the right citation when the same one appears several times.
+   */
+  async reveal(text: string, start: number, end: number): Promise<RevealOutcome> {
     const needle = text.slice(start, end);
-    if (!needle || needle.length > 255) return;
+    if (!needle) return { found: false, reason: "there is nothing to jump to" };
+    if (needle.length > 255) {
+      // Word's search limit. No citation comes close, but the guard is there.
+      return { found: false, reason: "that span is too long for Word to search for" };
+    }
     const occurrence = countBefore(text, needle, start);
 
-    await Word.run(async (context) => {
+    return Word.run(async (context) => {
       const results = context.document.body.search(needle, { matchCase: true });
       results.load("items");
       await context.sync();
 
       const target = results.items[occurrence];
-      if (!target) return;
+      if (!target) {
+        return {
+          found: false,
+          reason: "that citation is no longer in the document — check it again",
+        };
+      }
       target.select();
       await context.sync();
+      return REVEALED;
     });
   }
 

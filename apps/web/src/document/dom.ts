@@ -134,9 +134,16 @@ export function read(host: HTMLElement): RichDocument {
 
       const element = child as HTMLElement;
       if (element.tagName === "BR") {
-        // A trailing `<br>` is the filler that keeps an empty paragraph
-        // clickable; a `<br>` with something after it is a real line break.
-        if (element.nextSibling || current.length === 0) flush();
+        // A `<br>` that ends its parent is the filler which keeps an empty
+        // paragraph clickable, and is not a line of its own — the enclosing
+        // block will emit that paragraph as it closes. Only a `<br>` with
+        // something after it is a real break.
+        //
+        // Getting this wrong read `<p><br></p>` as *two* paragraphs, which
+        // put every offset after the first blank line one character out: the
+        // findings then painted nothing and a jump landed nowhere. Blank lines
+        // are in almost every real document, so it was wrong almost always.
+        if (element.nextSibling) flush();
         continue;
       }
 

@@ -214,9 +214,21 @@ export function useReCite({ host, corpus }: UseReCiteOptions) {
     [applyCorrectionList],
   );
 
+  /**
+   * Jump to a citation in the document.
+   *
+   * Offsets come from the last check, and the document may have been edited
+   * since — in Word, possibly by somebody else in another window. A click that
+   * silently did nothing would read as a broken button, so a miss says so.
+   */
   const reveal = useCallback(
     (start: number, end: number) => {
-      void host.reveal?.(textRef.current, start, end);
+      void (async () => {
+        const outcome = await host.reveal?.(textRef.current, start, end);
+        if (outcome && !outcome.found) {
+          setStatus(`Could not jump there: ${outcome.reason ?? "not found"}.`);
+        }
+      })();
     },
     [host],
   );
