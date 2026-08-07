@@ -123,12 +123,12 @@ the screen at all.
 Four things were adding up, and each is worth stating because each is a
 different mistake.
 
-| What                                                             | Why it was wrong                                                                                                            |
-| ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `.app` capped at 1100px                                          | a 2560px display used 43% of itself                                                                                         |
-| `.columns` split exactly in half                                 | one half is a page of prose, the other a list of short findings — they do not want the same width                           |
-| a 15rem comment margin, always                                   | it is **empty** until CourtListener has been asked for pincites, and it was taking 43% of the document's column to hold nothing |
-| `.editor-frame` capped at a fixed 34rem                          | a third of a desktop screen, whatever the screen                                                                            |
+| What                                    | Why it was wrong                                                                                                                |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `.app` capped at 1100px                 | a 2560px display used 43% of itself                                                                                             |
+| `.columns` split exactly in half        | one half is a page of prose, the other a list of short findings — they do not want the same width                               |
+| a 15rem comment margin, always          | it is **empty** until CourtListener has been asked for pincites, and it was taking 43% of the document's column to hold nothing |
+| `.editor-frame` capped at a fixed 34rem | a third of a desktop screen, whatever the screen                                                                                |
 
 The fix is four answers, and one of them matters more than the others.
 
@@ -162,7 +162,7 @@ Two smaller things were fixed on the way. In the stacked layout `.page` had
 nothing telling it to fill the frame, and `align-items: flex-start` is the
 horizontal axis once a flex row becomes a column — so a document of short
 paragraphs shrink-wrapped to **83px of text inside an 863px frame**. And the
-browser test that bolds a word passed only *because* the editor was too narrow:
+browser test that bolds a word passed only _because_ the editor was too narrow:
 it double-clicks a paragraph, Playwright aims at the middle of the box, and on
 a page wide enough to hold the sentence in one line the middle falls past the
 end of it and selects nothing. It now aims at a word.
