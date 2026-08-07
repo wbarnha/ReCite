@@ -88,8 +88,14 @@ a {
 
 /* ------------------------------------------------------------ layout ---- */
 
+/*
+ * Wide enough for a page of prose, the margin its comments live in, and the
+ * findings beside them. Everything inside has a size of its own, so past this
+ * the only thing that would grow is whitespace — but below it something has to
+ * give, and for a long time what gave was the document.
+ */
 .app {
-  max-width: 1100px;
+  max-width: 88rem;
   margin: 0 auto;
   padding: 1.25rem;
 }
@@ -120,9 +126,15 @@ a {
   font-size: 0.85rem;
 }
 
+/*
+ * Not two equal halves. One column holds a page of prose and the other holds a
+ * list of short findings, and a finding card is no easier to read at 34rem
+ * than at 24rem. What is left over belongs to the document, which is the thing
+ * being read.
+ */
 .columns {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(18rem, 24rem);
   gap: 1.25rem;
 }
 
@@ -300,6 +312,9 @@ a {
   font-size: 0.8rem;
   color: var(--muted);
   margin-bottom: 0.75rem;
+  /* The working area is wider than a line of prose should be; the prose in it
+     is not. Never binds in the Word pane, which is narrower than this. */
+  max-width: 62rem;
 }
 
 h2 {
@@ -584,7 +599,17 @@ select {
 
 /* --------------------------------------------------------------- editor --- */
 
+/*
+ * The editor answers to its own column, not to the window.
+ *
+ * Whether the comment margin fits beside the page is a question about how wide
+ * this column is. Asking the window instead is what put a 15rem margin next to
+ * a 180px page: at 961px the window is wide enough for two columns, and the
+ * column it gives the document is not wide enough for both halves of the
+ * editor. A container query asks the only element that knows.
+ */
 .editor {
+  container-type: inline-size;
   margin-bottom: 0.75rem;
 }
 
@@ -623,12 +648,23 @@ select {
   position: relative;
   display: flex;
   align-items: flex-start;
+  /* The sheet sits in the middle of the desk, and stays there when the margin
+     appears beside it. */
+  justify-content: center;
   gap: 1rem;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 1rem;
-  max-height: 34rem;
+  /*
+   * A window on the document, sized to the screen it is on. A fixed 34rem was
+   * a third of a desktop display and showed a page of a brief through a
+   * letterbox. Floored at what it has always been, so a short laptop screen is
+   * no worse off than before, and capped so the buttons under it stay in
+   * reach. The frame — not the window — is still what scrolls, which is what
+   * `reveal` in DocumentEditor.tsx depends on.
+   */
+  max-height: clamp(34rem, 100vh - 24rem, 56rem);
   overflow: auto;
 }
 
@@ -636,6 +672,15 @@ select {
   flex: 1 1 34rem;
   min-width: 0;
   min-height: 30rem;
+  /*
+   * A page is a measure, not a fraction of whatever room there is. Set much
+   * past this and the eye stops finding the start of the next line; this is
+   * about 75 characters of the serif below. Because the page stops growing
+   * before the frame does, pulling pincites in adds the margin beside it
+   * without reflowing a word of the prose — so the offsets the notes were
+   * positioned from still describe the document they were measured on.
+   */
+  max-width: 36rem;
   background: var(--bg);
   color: var(--fg);
   border: 1px solid var(--line);
@@ -703,6 +748,16 @@ select {
   align-self: stretch;
 }
 
+/*
+ * Room for comments is taken only when there are comments to put in it.
+ * Quotations arrive only after CourtListener has been asked for them, so for
+ * most of a session this is an empty 15rem column standing where the document
+ * should be — which is most of what was wrong with the document's width.
+ */
+.editor-margin:empty {
+  display: none;
+}
+
 .margin-note {
   position: absolute;
   left: 0;
@@ -742,10 +797,26 @@ select {
   margin-top: 0.3rem;
 }
 
-/* Below the two-column breakpoint the margin has nowhere to go. */
-@media (max-width: 60rem) {
+/*
+ * Below the width where the page and the margin both fit, the margin goes
+ * under the page.
+ *
+ * Asked of the editor's own column rather than of the window. The window was
+ * always the wrong thing to ask — this is half of a two-column layout on a
+ * desktop and the whole of a one-column layout on a phone, and only the column
+ * knows which. 55rem is the point below which the margin would have to take
+ * its 15rem out of the page.
+ */
+@container (max-width: 55rem) {
   .editor-frame {
     flex-direction: column;
+  }
+
+  /* `align-items: flex-start` is the horizontal axis once the frame stacks, so
+     without this the page shrink-wraps to its longest line — which for a
+     document of short paragraphs was 83px of text in an 863px frame. */
+  .page {
+    align-self: stretch;
   }
 
   .editor-margin {
@@ -754,6 +825,9 @@ select {
     position: static;
   }
 
+  /* The `top` the editor measured describes a layout that no longer exists.
+     Going static is what makes it inert, and it has to travel with whatever
+     rule does the stacking. */
   .margin-note {
     position: static;
     margin-bottom: 0.5rem;
