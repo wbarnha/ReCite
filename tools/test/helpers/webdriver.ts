@@ -20,6 +20,29 @@
 /** The key W3C uses to smuggle an element reference through JSON. */
 const ELEMENT_KEY = "element-6066-11e4-a52e-4f735466cecc";
 
+/** The key the pre-standard JSON Wire Protocol used, which remotes still send. */
+const LEGACY_ELEMENT_KEY = "ELEMENT";
+
+/**
+ * Pull the element reference out of a Find Element reply.
+ *
+ * Reading only the W3C key looks obviously right and is not: remotes differ on
+ * which key they answer with, and some send both. Getting this wrong does not
+ * announce itself — the lookup simply returns nothing, which is
+ * indistinguishable from "the element is not on the page", and the test fails
+ * somewhere else entirely saying `expected undefined`.
+ */
+function elementIdOf(reply: Record<string, unknown>): string | undefined {
+  for (const key of [ELEMENT_KEY, LEGACY_ELEMENT_KEY]) {
+    const value = reply[key];
+    if (typeof value === "string") return value;
+  }
+  // A reference under a key neither name predicted. The reply holds exactly one
+  // entry, so the single string in it is the reference.
+  const values = Object.values(reply).filter((v) => typeof v === "string");
+  return values.length === 1 ? values[0] : undefined;
+}
+
 interface Envelope<T> {
   readonly value: T;
 }
@@ -128,7 +151,21 @@ export class WebDriverSession {
     return `${text("browserName", "unknown")} ${text("browserVersion", "?")} on ${text("platformName", "?")}`;
   }
 
+  /**
+   * Go to a URL, by way of a blank page.
+   *
+   * Navigating straight from one page of the app to another leaves the old
+   * document readable for a moment, and anything that waits for a marker the
+   * old page also had — an `h1`, a heading, a title — matches immediately and
+   * hands back a document that is being torn down. Clearing first means a
+   * marker can only come from the page that was asked for.
+   */
   async navigate(url: string): Promise<void> {
+    if (url !== "about:blank") {
+      await send(this.base, "POST", `/session/${this.sessionId}/url`, {
+        url: "about:blank",
+      });
+    }
     await send(this.base, "POST", `/session/${this.sessionId}/url`, { url });
   }
 
@@ -150,20 +187,32 @@ export class WebDriverSession {
 
   /** Returns the opaque element id, or `undefined` when there is no match. */
   async find(selector: string): Promise<string | undefined> {
+    let found: Record<string, unknown>;
     try {
-      const found = await send<Record<string, string>>(
+      found = await send<Record<string, unknown>>(
         this.base,
         "POST",
         `/session/${this.sessionId}/element`,
         { using: "css selector", value: selector },
       );
-      return found[ELEMENT_KEY];
     } catch (error) {
       if (error instanceof WebDriverError && error.code === "no such element") {
         return undefined;
       }
       throw error;
     }
+
+    const element = elementIdOf(found);
+    if (element === undefined) {
+      // Loud, and with the evidence in it. A silent `undefined` here reads as
+      // "no such element" and sends the reader hunting the page instead of the
+      // protocol, which is a whole CI round trip wasted.
+      throw new Error(
+        `Find Element answered for ${selector} with no recognisable element ` +
+          `reference. Keys: ${JSON.stringify(Object.keys(found))}`,
+      );
+    }
+    return element;
   }
 
   async click(elementId: string): Promise<void> {
@@ -196,6 +245,41 @@ export class WebDriverSession {
       () => undefined,
     );
   }
+}
+
+/**
+ * Wait for an element to exist, then return its id.
+ *
+ * `find` asks once. WebDriver has no auto-waiting of any kind, and this app
+ * renders through React after the document is ready, so a single-shot lookup
+ * races the first render — and races it *invisibly*, because a miss is
+ * indistinguishable from "the element is not there at all".
+ *
+ * Existence is checked in the page rather than by retrying `find`, so the
+ * handle that comes back always belongs to the document that is current now.
+ * A handle taken from a document that has since been replaced is stale, and
+ * every use of it fails with a different and more confusing error.
+ */
+export async function waitForElement(
+  session: WebDriverSession,
+  selector: string,
+  timeoutMs = 30_000,
+): Promise<string> {
+  await waitFor<boolean>(
+    session,
+    `return !!document.querySelector(${JSON.stringify(selector)})`,
+    (present) => present,
+    timeoutMs,
+    `an element matching ${selector}`,
+  );
+
+  const element = await session.find(selector);
+  if (!element) {
+    throw new Error(
+      `${selector} was in the document and then was not — the page is still changing`,
+    );
+  }
+  return element;
 }
 
 /**

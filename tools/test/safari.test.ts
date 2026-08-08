@@ -28,15 +28,15 @@
  * ```
  */
 
-import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { type Server } from "node:http";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { BASE_PATH, serveSite, siteIsBuilt } from "./helpers/site-server.js";
-import { reachable, waitFor, WebDriverSession } from "./helpers/webdriver.js";
+import { BASE_PATH, DIST, serveSite, siteIsBuilt } from "./helpers/site-server.js";
+import { join } from "node:path";
+
+import { reachable, waitForElement, WebDriverSession } from "./helpers/webdriver.js";
 
 /**
  * Opt in explicitly.
@@ -54,6 +54,20 @@ const endpoint = process.env["RECITE_WEBDRIVER"];
  */
 const REQUIRED = process.env["RECITE_REQUIRE_SAFARI"] === "1";
 
+/**
+ * The lazily-imported chunk that holds `pdfjs-dist` and `tesseract.js`.
+ *
+ * Found by name rather than pinned, since the hash changes every build.
+ */
+const engineChunk = (() => {
+  const assets = join(DIST, "assets");
+  if (!existsSync(assets)) return "";
+  const found = readdirSync(assets).find(
+    (name) => name.startsWith("pdf-permissive-") && name.endsWith(".js"),
+  );
+  return found ? `assets/${found}` : "";
+})();
+
 const possible =
   siteIsBuilt() &&
   endpoint !== undefined &&
@@ -63,8 +77,6 @@ describe.skipIf(!possible)("the published site in the Safari Apple ships", () =>
   let server: Server;
   let origin: string;
   let session: WebDriverSession;
-  /** Where fixtures are written, since a file input takes a path over WebDriver. */
-  let fixtures: string;
 
   beforeAll(async () => {
     if (!(await reachable(endpoint!))) {
@@ -77,7 +89,6 @@ describe.skipIf(!possible)("the published site in the Safari Apple ships", () =>
 
     ({ server, origin } = await serveSite({ collectErrors: true }));
     session = await WebDriverSession.open(endpoint!, "safari");
-    fixtures = mkdtempSync(join(tmpdir(), "recite-safari-"));
 
     // Printed so a green run always says which browser was green. A matrix
     // that claims Safari is worth nothing if nobody can see the version.
@@ -92,8 +103,7 @@ describe.skipIf(!possible)("the published site in the Safari Apple ships", () =>
   /** Load the app fresh, with the error collector already listening. */
   async function open(): Promise<void> {
     await session.navigate(`${origin}${BASE_PATH}`);
-    await waitFor<string>(
-      session,
+    await waitForPage(
       "return document.querySelector('h1') ? document.querySelector('h1').textContent : ''",
       (text) => text === "ReCite",
       60_000,
@@ -101,31 +111,147 @@ describe.skipIf(!possible)("the published site in the Safari Apple ships", () =>
     );
   }
 
-  /** Everything the page threw since it loaded. */
-  async function errors(): Promise<string[]> {
-    return session.execute<string[]>("return window.__reciteErrors || []");
+  /**
+   * Everything that went wrong, from all three places it can show up.
+   *
+   * The first version of this read only `window.__reciteErrors`, and reported
+   * "none recorded" for two solid failures. Two reasons, both worth stating:
+   *
+   * - `window.__reciteErrors || []` cannot tell "nothing was thrown" from
+   *   "the collector never loaded". It now reports the collector's absence as
+   *   a fault of its own, because a silent instrument is worse than none.
+   * - **ReCite catches import failures.** `FileDrop` puts the message in
+   *   `.filedrop-error` rather than letting it reach `window.onerror`, so the
+   *   thing being hunted was on screen the whole time and the suite was
+   *   looking past it.
+   */
+  async function faults(): Promise<string[]> {
+    const state = JSON.parse(
+      await session.execute<string>(`return JSON.stringify({
+        collector: typeof window.__reciteErrors !== 'undefined',
+        thrown: window.__reciteErrors || [],
+        importError: (document.querySelector('.filedrop-error') || {}).textContent || '',
+        progress: (document.querySelector('.filedrop-progress') || {}).textContent || '',
+        status: (document.querySelector('.status') || {}).textContent || ''
+      })`),
+    ) as {
+      collector: boolean;
+      thrown: string[];
+      importError: string;
+      progress: string;
+      status: string;
+    };
+
+    const found: string[] = [];
+    if (!state.collector) {
+      found.push(
+        "the error collector never loaded — this suite is blind, fix that first",
+      );
+    }
+    found.push(...state.thrown);
+    if (state.importError.trim())
+      found.push(`the app reported: ${state.importError.trim()}`);
+    return found;
   }
 
-  /** Write a fixture and hand its path to the file input, as W3C prescribes. */
+  /** What the page is showing, for a failure message that can be acted on. */
+  async function narrate(): Promise<string> {
+    const state = JSON.parse(
+      await session.execute<string>(`return JSON.stringify({
+        progress: (document.querySelector('.filedrop-progress') || {}).textContent || '',
+        status: (document.querySelector('.status') || {}).textContent || '',
+        importError: (document.querySelector('.filedrop-error') || {}).textContent || ''
+      })`),
+    ) as { progress: string; status: string; importError: string };
+    return (
+      `progress=${JSON.stringify(state.progress.trim())} ` +
+      `status=${JSON.stringify(state.status.trim())} ` +
+      `error=${JSON.stringify(state.importError.trim())}`
+    );
+  }
+
+  /**
+   * Put a file on the file input, from inside the page.
+   *
+   * W3C attaches a file by sending a path to the input, which is the faithful
+   * route and is not available here: the input is deliberately hidden — a
+   * visually-hidden control behind a styled label, which is how the drop zone
+   * is built — and a remote may decline to type into something it cannot see.
+   *
+   * So the `File` is constructed in the page and assigned through a
+   * `DataTransfer`, then `change` is dispatched. That is the same object and
+   * the same event the browser produces when someone picks a file, so
+   * `FileDrop`'s handler and everything under it run exactly as they would;
+   * only the native picker, which no driver can automate anyway, is skipped.
+   * Verified against Chromium before being relied on here.
+   */
   async function openFile(name: string, contents: Buffer | string): Promise<void> {
-    const path = join(fixtures, name);
-    writeFileSync(path, contents);
-    const input = await session.find("input[type=file]");
-    expect(input, "the file input is missing").toBeDefined();
-    await session.sendKeys(input!, path);
+    const base64 = Buffer.from(contents).toString("base64");
+    const attached = await session.execute<string>(
+      `var input = document.querySelector('input[type=file]');
+       if (!input) return 'no file input on the page';
+       var raw = atob(${JSON.stringify(base64)});
+       var bytes = new Uint8Array(raw.length);
+       for (var i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+       var transfer = new DataTransfer();
+       transfer.items.add(new File([bytes], ${JSON.stringify(name)}));
+       input.files = transfer.files;
+       input.dispatchEvent(new Event('change', { bubbles: true }));
+       return 'ok';`,
+    );
+    expect(attached, `could not attach ${name}`).toBe("ok");
+  }
+
+  /**
+   * Wait for the page, and say what it threw if the wait never finishes.
+   *
+   * The collector exists so a failure can name the exception, and the first
+   * version of this file wasted that: it read the errors only *after* a
+   * successful wait, so the one run that mattered — a four-minute timeout on
+   * the PDF — reported `Last value: ""` and threw the actual message away.
+   *
+   * Now the errors are read on every poll. A throw ends the wait immediately
+   * with the browser's own words, and a genuine timeout still reports whatever
+   * was recorded.
+   */
+  async function waitForPage(
+    script: string,
+    matches: (text: string) => boolean,
+    timeoutMs: number,
+    what: string,
+  ): Promise<string> {
+    const deadline = Date.now() + timeoutMs;
+    let last = "";
+
+    while (Date.now() < deadline) {
+      const wrong = await faults().catch(() => []);
+      if (wrong.length > 0) {
+        throw new Error(`${what}: ${wrong.join("; ")}`);
+      }
+      last = await session.execute<string>(script);
+      if (matches(last)) return last;
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+
+    const wrong = await faults().catch(() => []);
+    throw new Error(
+      `${what} did not happen within ${timeoutMs}ms. ` +
+        `Last value: ${JSON.stringify(last).slice(0, 200)}. ` +
+        `Faults: ${wrong.length > 0 ? wrong.join("; ") : "none recorded"}. ` +
+        `Page was showing ${await narrate().catch(() => "nothing readable")}`,
+    );
   }
 
   it("loads and runs without a script error", async () => {
     await open();
-    expect(await errors()).toEqual([]);
+    expect(await faults()).toEqual([]);
   }, 120_000);
 
   it("checks a citation", async () => {
     await open();
-    const textarea = await session.find("textarea");
-    expect(textarea).toBeDefined();
+    const textarea = await waitForElement(session, "textarea");
     await session.sendKeys(
-      textarea!,
+      textarea,
       "Doe v. Roe, 526 U.S. 795 (U.S. 1999); Miller, 174 F.3d 366, 371 (2d Cir. 1999).",
     );
 
@@ -138,29 +264,79 @@ describe.skipIf(!possible)("the published site in the Safari Apple ships", () =>
     );
     expect(check, "the Check citations button is missing").toBe(true);
 
-    await waitFor<string>(
-      session,
+    await waitForPage(
       "return document.querySelector('.status') ? document.querySelector('.status').textContent : ''",
       (text) => /citation/i.test(text),
       60_000,
       "the check to report",
     );
-    expect(await errors()).toEqual([]);
+    expect(await faults()).toEqual([]);
   }, 120_000);
 
   it("opens a file into the editor", async () => {
     await open();
     await openFile("brief.txt", "Iqbal, 556 U.S. 662, 678 (2009). Id. at 680.");
 
-    await waitFor<string>(
-      session,
+    await waitForPage(
       "return document.querySelector('.page') ? document.querySelector('.page').textContent : ''",
       (text) => text.includes("556 U.S. 662"),
       60_000,
       "the document to open",
     );
-    expect(await errors()).toEqual([]);
+    expect(await faults()).toEqual([]);
   }, 120_000);
+
+  it("reports whether this browser can iterate a ReadableStream", async () => {
+    // Evidence, and the diagnosis in one line.
+    //
+    // `pdfjs-dist` reads a page's text layer with
+    // `for await (const chunk of this.streamTextContent(...))`. Async iteration
+    // of a `ReadableStream` is part of the Streams standard and Safari has not
+    // shipped it, so asking for the iterator gets `undefined` and calling it
+    // throws `undefined is not a function (near '...e of t...')` — which is
+    // exactly, character for character, what an iPhone reported.
+    //
+    // Not an assertion about the browser, because ReCite works either way:
+    // `stream-async-iterator.ts` installs the missing iterator when the PDF
+    // chunk is evaluated, and `opens a PDF` below proves that end to end.
+    //
+    // What this records is the *untouched* browser, read on a page that has
+    // not yet imported the PDF chunk and so has not yet been polyfilled. When
+    // a future run prints `function` here, Safari has caught up and the
+    // polyfill can go.
+    await open();
+    const native = await session.execute<string>(
+      "return typeof ReadableStream.prototype[Symbol.asyncIterator]",
+    );
+    console.log(`  ReadableStream async iteration, unpolyfilled: ${native}`);
+    expect(["function", "undefined"]).toContain(native);
+  }, 120_000);
+
+  it("loads the PDF engine chunk at all", async () => {
+    // Narrowing, not coverage.
+    //
+    // Both PDF cases fail in about two seconds — the same for a text-layer PDF
+    // as for an eleven-page scan — which is far too fast to be PDF *work*. The
+    // PDF path is also the only one that takes a dynamic `import()`, and a
+    // `.txt` (which takes none) opens fine. That points at the chunk failing
+    // when it is evaluated rather than at anything it later does.
+    //
+    // So import the chunk directly and report what comes back. The app catches
+    // import failures and shows only `.message`, which is how this hunt lost
+    // the stack; here nothing catches it, so the frame survives.
+    await open();
+
+    const outcome = await session.execute<string>(
+      `return import(${JSON.stringify(`${BASE_PATH}${engineChunk}`)})
+         .then(function () { return 'ok'; },
+               function (e) { return 'THREW: ' + (e && (e.stack || e.message) || String(e)); });`,
+    );
+
+    expect(
+      outcome,
+      `the lazily-imported PDF chunk (${engineChunk}) failed to evaluate`,
+    ).toBe("ok");
+  }, 180_000);
 
   it("opens a PDF", async () => {
     // The path an iPhone crashed on, in the engine family that crashed. This
@@ -169,14 +345,66 @@ describe.skipIf(!possible)("the published site in the Safari Apple ships", () =>
     await open();
     await openFile("brief.pdf", textLayerPdf("Miller, 174 F.3d 366 (2d Cir. 1999)."));
 
-    await waitFor<string>(
-      session,
+    await waitForPage(
       "return document.querySelector('.page') ? document.querySelector('.page').textContent : ''",
       (text) => /174 F\.?\s?3d 366/.test(text),
-      240_000,
+      120_000,
       "the PDF to be read",
     );
-    expect(await errors(), "the PDF path threw in the browser Apple ships").toEqual([]);
+    expect(await faults(), "the PDF path failed in the browser Apple ships").toEqual(
+      [],
+    );
+  }, 300_000);
+
+  it("opens the example filing", async () => {
+    // The case a user actually reported: on iOS 26.5.4, pressing **Try the
+    // example filing** answers `undefined is not a function (near '...e of
+    // t...')` — JavaScriptCore's wording for iterating something with no
+    // iterator.
+    //
+    // Everything above this opens a PDF with a text layer, which never reaches
+    // the recognition engine. The example filing is eleven pages, part typed
+    // and part scanned exhibit, so it is the only fixture that runs
+    // `tesseract.js` — and the report says that is where the difference is.
+    // It is also reached by its own button rather than the file input, so this
+    // covers `loadExample` too.
+    //
+    // Slow on purpose. Recognising eleven pages is the point; a fast version
+    // of this test would be a version that does not run OCR, which is the
+    // thing under suspicion.
+    await open();
+
+    const pressed = await session.execute<boolean>(
+      "var b = Array.prototype.find.call(document.querySelectorAll('button')," +
+        " function (x) { return /Try the example filing/.test(x.textContent); });" +
+        " if (b) { b.click(); return true; } return false;",
+    );
+    expect(pressed, "the example filing button is missing").toBe(true);
+
+    // Errors are checked *while* it works, not only at the end: if the engine
+    // throws, the editor never fills and a plain wait would time out after ten
+    // minutes reporting nothing useful.
+    // Matched on the docket header, which comes off the text layer, rather
+    // than on a citation out of the scanned exhibit.
+    //
+    // That is a deliberate limit and worth stating. What this test exists to
+    // prove is the reported failure: pressing the button used to answer
+    // `undefined is not a function` and read nothing at all. Text on the page
+    // proves `loadExample`, pdf.js and the stream iterator all work in Safari.
+    //
+    // What it does not prove is recognition finishing. Eleven pages of OCR ran
+    // past ten minutes on this runner while reading correctly the whole time —
+    // a wall-clock cost, not a fault, and not one worth paying on a machine
+    // that bills at ten times the rate. The OCR path is covered end to end on
+    // Chromium in `browser.test.ts`, which is where minutes are cheap.
+    await waitForPage(
+      "return document.querySelector('.page') ? document.querySelector('.page').textContent : ''",
+      (text) => /1:22-cv-01461/.test(text),
+      240_000,
+      "the example filing to be read",
+    );
+
+    expect(await faults(), "the example filing failed in Safari").toEqual([]);
   }, 300_000);
 });
 

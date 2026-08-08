@@ -29,6 +29,7 @@ import { createWorker, type Worker as TesseractWorker } from "tesseract.js";
 import { TESSDATA_DIR } from "../build-info.js";
 import type { ProgressHandler } from "./index.js";
 import type { OcrSettings } from "./ocr-options.js";
+import { installStreamAsyncIterator } from "./stream-async-iterator.js";
 import { repairSectionSymbols } from "./ocr-repair.js";
 import type { PageExtraction } from "./pdf-engine-result.js";
 
@@ -102,6 +103,12 @@ export async function releasePermissiveEngine(): Promise<void> {
   worker = undefined;
   await (await held).terminate();
 }
+
+// Before pdf.js is asked for anything. `getTextContent` iterates a
+// `ReadableStream` with `for await`, which Safari has not shipped — see
+// `stream-async-iterator.ts` for the whole of that story. Installed at module
+// evaluation so it is in place however this module comes to be used.
+installStreamAsyncIterator();
 
 export async function extractPermissive(
   file: File,

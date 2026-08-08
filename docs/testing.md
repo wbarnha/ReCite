@@ -289,6 +289,39 @@ treating `no such element` as an absence rather than a fault, and keeping the
 remote's own wording when a command fails. That last one matters: the message
 this whole exercise is chasing is one Safari produces and nothing else does.
 
+### The bug this found
+
+The safaridriver job paid for itself on its first real run, and the shape of
+that is worth recording.
+
+An iPhone on iOS 26.5.4 answered `undefined is not a function (near '...e of
+t...')` for every PDF. Chromium CI was green. So was Playwright's WebKit — the
+`webkit-phone` row — because that build is WebKit **trunk** and trunk has the
+feature the shipping browser lacks. Only real Safari 26.5.2 reproduced it, and
+it reproduced every time.
+
+The fault was in `pdfjs-dist`:
+
+```js
+const stream = this.streamTextContent(...);
+for await (const chunk of stream) { ... }
+```
+
+Async iteration of a `ReadableStream` is part of the Streams standard and
+Safari has not shipped it, so the iterator is `undefined` and JavaScriptCore
+quotes the source it choked on — the `e of t` in the message is that loop,
+minified. `apps/web/src/import/stream-async-iterator.ts` installs the missing
+iterator; the loop itself is correct and a newer pdf.js would write the same
+one.
+
+Two lessons for whoever maintains this next. The engine matters more than the
+form factor: no amount of phone-shaped Chromium would have found this, and
+neither would WebKit trunk. And **the app catching its own errors made it
+invisible** — `FileDrop` puts import failures in `.filedrop-error` rather than
+letting them reach `window.onerror`, so a collector watching only `pageerror`
+reported "none recorded" through three separate runs. A suite that watches for
+faults has to watch where the application puts them.
+
 ### What goes in this suite
 
 It is the wide suite, not the deep one. `browser.test.ts` still owns OCR, the
